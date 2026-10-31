@@ -25,7 +25,7 @@ juce_add_plugin(CX5MReborn
 juce_generate_juce_header(CX5MReborn)
 target_sources(CX5MReborn PRIVATE
   Source/PluginProcessor.cpp Source/PluginEditor.cpp
-  "${YMFM_DIR}/src/ymfm_fm.cpp"
+  "${YMFM_DIR}/src/ymfm_misc.cpp"
   "${YMFM_DIR}/src/ymfm_opm.cpp")
 target_include_directories(CX5MReborn PRIVATE "${YMFM_DIR}/src")
 target_compile_definitions(CX5MReborn PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
