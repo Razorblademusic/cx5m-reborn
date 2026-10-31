@@ -3,6 +3,7 @@
 #include "CassetteBank.h"
 #include <algorithm>
 #include <cmath>
+#include <memory>
 
 juce::AudioProcessorValueTreeState::ParameterLayout CX5MProcessor::makeParams() {
     juce::AudioProcessorValueTreeState::ParameterLayout p;
@@ -82,8 +83,8 @@ void CX5MProcessor::noteOn(int note,float velocity) {
     for(int op=0;op<4;++op) {
         if(activeBank>0) {
             const size_t pos = static_cast<size_t>((activeBank-1)*64+16+op*8);
-            int base = cassetteBank::raw[pos] & 127;
-            int sensitivity = (cassetteBank::raw[pos+1] >> 4) & 7;
+            int base = bankBytes()[pos] & 127;
+            int sensitivity = (bankBytes()[pos+1] >> 4) & 7;
             int tl = juce::jlimit(0,127,base + static_cast<int>((1.f-velocity)*sensitivity*5.f));
             write(static_cast<uint8_t>(0x60+ch+op*8),static_cast<uint8_t>(tl));
             continue;
@@ -93,7 +94,7 @@ void CX5MProcessor::noteOn(int note,float velocity) {
         int tl=juce::jlimit(0,127,static_cast<int>(std::round((1.f-level*velocity)*110.f)));
         write(static_cast<uint8_t>(0x60+ch+op*8),static_cast<uint8_t>(tl));
     }
-    uint8_t mask = activeBank>0 ? static_cast<uint8_t>(cassetteBank::raw[static_cast<size_t>((activeBank-1)*64+11)] & 0x78) : 0x78;
+    uint8_t mask = activeBank>0 ? static_cast<uint8_t>(bankBytes()[static_cast<size_t>((activeBank-1)*64+11)] & 0x78) : 0x78;
     write(0x08,static_cast<uint8_t>(mask|ch));
 }
 void CX5MProcessor::noteOff(int note) {
@@ -103,7 +104,7 @@ void CX5MProcessor::noteOff(int note) {
 }
 void CX5MProcessor::loadCassetteVoice(int index) {
     const size_t base = static_cast<size_t>((index-1)*64);
-    const auto& r = cassetteBank::raw;
+    const auto& r = bankBytes();
     // Mute existing notes before changing chip registers.
     for(int ch=0;ch<8;++ch) { write(0x08,static_cast<uint8_t>(ch)); voices[ch] = {}; }
     write(0x18,r[base+8]); // LFO frequency
@@ -127,7 +128,8 @@ void CX5MProcessor::loadCassetteVoice(int index) {
 }
 void CX5MProcessor::updateParameters() {
     int selected = juce::jlimit(0,48,static_cast<int>(state.getRawParameterValue("bank")->load()));
-    if(selected != lastBank) {
+    if(selected != lastBank || seenImportRevision != importRevision.load(std::memory_order_acquire)) {
+        seenImportRevision = importRevision.load(std::memory_order_relaxed);
         activeBank = selected; lastBank = selected;
         if(selected>0) loadCassetteVoice(selected);
         else { lastAlgorithm=-1; lastRatio.fill(-1); lastLevel.fill(-1); lastAttack.fill(-1); lastRelease.fill(-1); }
@@ -164,6 +166,8 @@ void CX5MProcessor::tick() {
 void CX5MProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::MidiBuffer& midi) {
     juce::ScopedNoDenormals guard;
     buffer.clear();
+    // Take an immutable bank snapshot once per audio block; no disk I/O or locks here.
+    currentAudioBank = std::atomic_load(&importedBank);
     updateParameters();
     auto it=midi.cbegin();
     double step=nativeRate/hostRate;
@@ -186,6 +190,74 @@ void CX5MProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::MidiBuff
     }
 }
 juce::AudioProcessorEditor* CX5MProcessor::createEditor(){return new CX5MEditor(*this);}
-void CX5MProcessor::getStateInformation(juce::MemoryBlock& dest){auto xml=state.copyState().createXml();copyXmlToBinary(*xml,dest);}
-void CX5MProcessor::setStateInformation(const void* data,int bytes){auto xml=getXmlFromBinary(data,bytes);if(xml&&xml->hasTagName(state.state.getType()))state.replaceState(juce::ValueTree::fromXml(*xml));}
+const CX5MProcessor::BankData& CX5MProcessor::bankBytes() const noexcept {
+    return currentAudioBank ? *currentAudioBank : cassetteBank::raw;
+}
+
+bool CX5MProcessor::importVoiceBank(const juce::File& file, juce::String& error) {
+    if (!file.existsAsFile() || file.getSize() != 3072) {
+        error = "Select a decoded 48-voice bank (.bin, exactly 3072 bytes). WAV decoding is not yet supported.";
+        return false;
+    }
+    juce::MemoryBlock bytes;
+    if (!file.loadFileAsData(bytes) || bytes.getSize() != 3072) {
+        error = "Could not read the bank file."; return false;
+    }
+    auto candidate = std::make_shared<BankData>();
+    std::memcpy(candidate->data(), bytes.getData(), candidate->size());
+    int plausible = 0;
+    for (int i=0;i<48;++i) {
+        const auto* r = candidate->data() + i*64;
+        bool name = true;
+        for (int j=0;j<7;++j) if (r[j] < 32 || r[j] > 126) name = false;
+        if (name && r[11] == 0x78) ++plausible;
+    }
+    if (plausible < 40) {
+        error = "This does not resemble a decoded CX5M 48-voice bank (expected printable names and Yamaha voice records).";
+        return false;
+    }
+    std::shared_ptr<const BankData> immutable = candidate;
+    std::atomic_store(&importedBank, immutable);
+    // Force reload of currently selected patch on the audio thread.
+    // No change to parameters or chip state from the GUI thread.
+    importRevision.fetch_add(1, std::memory_order_release);
+    return true;
+}
+
+juce::String CX5MProcessor::getImportedVoiceName(int index) const {
+    auto bank = std::atomic_load(&importedBank);
+    const auto& data = bank ? *bank : cassetteBank::raw;
+    juce::String name;
+    if (index < 0 || index >= 48) return name;
+    for (int j=0;j<7;++j) {
+        auto c = data[static_cast<size_t>(index*64+j)];
+        if (c>=32 && c<=126) name += juce::String::charToString(static_cast<juce_wchar>(c));
+    }
+    return name.trim();
+}
+
+void CX5MProcessor::getStateInformation(juce::MemoryBlock& dest) {
+    auto tree = state.copyState();
+    if (auto bank = std::atomic_load(&importedBank))
+        tree.setProperty("importedBankBase64", juce::MemoryBlock(bank->data(), bank->size()).toBase64Encoding(), nullptr);
+    auto xml = tree.createXml(); copyXmlToBinary(*xml, dest);
+}
+void CX5MProcessor::setStateInformation(const void* data,int bytes) {
+    auto xml = getXmlFromBinary(data,bytes);
+    if (!xml || !xml->hasTagName(state.state.getType())) return;
+    auto tree = juce::ValueTree::fromXml(*xml);
+    auto encoded = tree.getProperty("importedBankBase64").toString();
+    if (encoded.isNotEmpty()) {
+        juce::MemoryBlock block;
+        if (block.fromBase64Encoding(encoded) && block.getSize() == 3072) {
+            auto bank = std::make_shared<BankData>();
+            std::memcpy(bank->data(), block.getData(), bank->size());
+            std::shared_ptr<const BankData> immutable = bank;
+            std::atomic_store(&importedBank, immutable);
+            importRevision.fetch_add(1, std::memory_order_release);
+        }
+    }
+    tree.removeProperty("importedBankBase64", nullptr);
+    state.replaceState(tree);
+}
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter(){return new CX5MProcessor();}

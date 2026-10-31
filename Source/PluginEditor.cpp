@@ -20,7 +20,22 @@ CX5MEditor::CX5MEditor(CX5MProcessor& p) : AudioProcessorEditor(&p), processor(p
     }
     addAndMakeVisible(bank);
     bankAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(processor.state,"bank",bank);
-    cassette.setEnabled(false); addAndMakeVisible(cassette);
+    addAndMakeVisible(cassette);
+    cassette.onClick = [this] {
+        chooser = std::make_unique<juce::FileChooser>("Choose a decoded 48-voice CX5M bank", juce::File{}, "*.bin");
+        chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+            [safe = juce::Component::SafePointer<CX5MEditor>(this)](const juce::FileChooser& fc) {
+                if (safe == nullptr) return;
+                auto file = fc.getResult();
+                if (file == juce::File{}) return;
+                juce::String error;
+                if (!safe->processor.importVoiceBank(file, error)) {
+                    juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon, "Bank import failed", error);
+                } else {
+                    safe->refreshBankNames();
+                }
+            });
+    };
     setSize(860, 520);
 }
 void CX5MEditor::addControl(const juce::String& id, const juce::String& name) {
@@ -60,4 +75,13 @@ void CX5MEditor::resized() {
     algorithm.setBounds(190, 412, 190, 32);
     bank.setBounds(415, 392, 410, 34);
     cassette.setBounds(480, 450, 345, 36);
+}
+
+void CX5MEditor::refreshBankNames() {
+    const int selected = bank.getSelectedId();
+    bank.clear(juce::dontSendNotification);
+    bank.addItem("Prototype (v0.3)", 1);
+    for (int i=0;i<48;++i)
+        bank.addItem(juce::String(i+1).paddedLeft('0',2) + "  " + processor.getImportedVoiceName(i), i+2);
+    bank.setSelectedId(selected, juce::dontSendNotification);
 }

@@ -18,6 +18,8 @@ private:
     juce::ComboBox bank;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> bankAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> algorithmAttachment;
-    juce::TextButton cassette{"CASSETTE IMPORT — COMING LATER"};
+    juce::TextButton cassette{"LOAD DECODED BANK (.BIN)"};
+    std::unique_ptr<juce::FileChooser> chooser;
+    void refreshBankNames();
     void addControl(const juce::String& id, const juce::String& label);
 };

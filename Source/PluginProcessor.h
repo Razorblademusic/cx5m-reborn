@@ -3,6 +3,8 @@
 #include <ymfm_opm.h>
 #include <array>
 #include <cstdint>
+#include <atomic>
+#include <memory>
 
 // v0.3: real ymfm YM2151 chip core; editor parameter mappings remain experimental.
 class CX5MProcessor final : public juce::AudioProcessor {
@@ -26,7 +28,17 @@ public:
     void getStateInformation(juce::MemoryBlock&) override;
     void setStateInformation(const void*, int) override;
     juce::AudioProcessorValueTreeState state;
+    // Import a pre-decoded Yamaha 48 x 64-byte bank. WAV decoding is a separate step.
+    bool importVoiceBank(const juce::File& file, juce::String& error);
+    juce::String getImportedVoiceName(int index) const;
+
 private:
+    using BankData = std::array<uint8_t, 3072>;
+    std::shared_ptr<const BankData> importedBank;
+    std::shared_ptr<const BankData> currentAudioBank;
+    std::atomic<unsigned> importRevision{0};
+    unsigned seenImportRevision = 0;
+    const BankData& bankBytes() const noexcept;
     struct Interface final : ymfm::ymfm_interface {};
     Interface interface;
     ymfm::ym2151 chip;
