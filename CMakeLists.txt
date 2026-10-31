@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(CX5MReborn VERSION 0.1.0 LANGUAGES CXX)
+project(CX5MReborn VERSION 0.1.0 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 # Supply JUCE via -DJUCE_DIR=path/to/JUCE or install JUCE as a CMake package.
 if(DEFINED JUCE_DIR)
