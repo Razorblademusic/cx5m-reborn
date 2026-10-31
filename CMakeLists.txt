@@ -21,5 +21,5 @@ juce_add_plugin(CX5MReborn
   COPY_PLUGIN_AFTER_BUILD FALSE) 
 juce_generate_juce_header(CX5MReborn)
 target_sources(CX5MReborn PRIVATE Source/PluginProcessor.cpp Source/PluginEditor.cpp)
-target_compile_definitions(CX5MReborn PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
+target_compile_definitions(CX5MReborn PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
 target_link_libraries(CX5MReborn PRIVATE juce::juce_audio_utils juce::juce_audio_processors juce::juce_dsp juce::juce_gui_extra juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
