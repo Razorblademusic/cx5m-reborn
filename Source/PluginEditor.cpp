@@ -6,7 +6,7 @@ CX5MEditor::CX5MEditor(CX5MProcessor& p) : AudioProcessorEditor(&p), processor(p
         addControl("attack" + s, "ATTACK"); addControl("release" + s, "RELEASE");
     }
     addControl("output", "OUTPUT");
-    algorithm.addItemList({"Chain", "Two pairs", "Three plus carrier", "Parallel"}, 1);
+    algorithm.addItemList({"Algorithm 1", "Algorithm 2", "Algorithm 3", "Algorithm 4", "Algorithm 5", "Algorithm 6", "Algorithm 7", "Algorithm 8"}, 1);
     addAndMakeVisible(algorithm);
     algorithmAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(processor.state, "algorithm", algorithm);
     cassette.setEnabled(false); addAndMakeVisible(cassette);
@@ -28,7 +28,7 @@ void CX5MEditor::paint(juce::Graphics& g) {
     g.setColour(juce::Colour(0xff80c8dc)); g.setFont(juce::Font(27.f, juce::Font::bold));
     g.drawText("CX5M  /  REBORN", 22, 12, 550, 42, juce::Justification::centredLeft);
     g.setColour(juce::Colours::lightgrey); g.setFont(13.f);
-    g.drawText("4-OP FM  •  EARLY SYNTH PROTOTYPE  •  NOT YET YM2151-ACCURATE", 24, 54, 800, 24, juce::Justification::centredLeft);
+    g.drawText("YM2151 OPM CORE  |  EXPERIMENTAL PARAMETER MAPPING", 24, 54, 800, 24, juce::Justification::centredLeft);
     for (int i = 0; i < 4; ++i) {
         auto r = juce::Rectangle<float>(20.f + i * 210.f, 105.f, 198.f, 250.f);
         g.setColour(juce::Colour(0xff263342)); g.fillRoundedRectangle(r, 8.f);

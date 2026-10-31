@@ -1,13 +1,14 @@
 #pragma once
 #include <JuceHeader.h>
+#include <ymfm_opm.h>
 #include <array>
+#include <cstdint>
 
-// Initial playable four-operator FM prototype.
-// IMPORTANT: This is NOT yet YM2151 hardware emulation.
+// v0.3: real ymfm YM2151 chip core; editor parameter mappings remain experimental.
 class CX5MProcessor final : public juce::AudioProcessor {
 public:
     CX5MProcessor();
-    void prepareToPlay(double sampleRate, int) override;
+    void prepareToPlay(double, int) override;
     void releaseResources() override {}
     void processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
     juce::AudioProcessorEditor* createEditor() override;
@@ -16,36 +17,33 @@ public:
     bool acceptsMidi() const override { return true; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
-    double getTailLengthSeconds() const override { return 1.0; }
+    double getTailLengthSeconds() const override { return 3.0; }
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
     void setCurrentProgram(int) override {}
-    const juce::String getProgramName(int) override { return "Init FM"; }
+    const juce::String getProgramName(int) override { return "Init OPM"; }
     void changeProgramName(int, const juce::String&) override {}
     void getStateInformation(juce::MemoryBlock&) override;
     void setStateInformation(const void*, int) override;
     juce::AudioProcessorValueTreeState state;
 private:
-    struct Voice {
-        int note = -1;
-        double phase[4]{};
-        double env[4]{};
-        bool released = false;
-        uint64_t age = 0;
-        double velocity = 1.0;
-    };
+    struct Interface final : ymfm::ymfm_interface {};
+    Interface interface;
+    ymfm::ym2151 chip;
+    struct Voice { int note = -1; bool released = false; uint64_t age = 0; float velocity = 1.f; int releaseSamples = 0; };
     std::array<Voice, 8> voices{};
-    double sampleRateHz = 44100.0;
     uint64_t counter = 0;
     int bend = 8192;
+    double hostRate = 44100.0, nativeRate = 55930.0, fraction = 0.0;
+    std::array<double, 2> prev{}, next{};
+    std::array<int, 4> lastRatio{{-1,-1,-1,-1}}, lastLevel{{-1,-1,-1,-1}}, lastAttack{{-1,-1,-1,-1}}, lastRelease{{-1,-1,-1,-1}};
+    int lastAlgorithm = -1;
+    void write(uint8_t reg, uint8_t value);
+    void setPitch(int channel, int note);
     void noteOn(int note, float velocity);
     void noteOff(int note);
-    struct Params {
-        double ratio[4]{}, level[4]{}, attackCoeff[4]{}, releaseCoeff[4]{};
-        int algorithm = 0;
-        float output = 0.35f;
-    };
-    float render(Voice& voice, const Params& params);
+    void updateParameters();
+    void tick();
     static juce::AudioProcessorValueTreeState::ParameterLayout makeParams();
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(CX5MProcessor)
 };
