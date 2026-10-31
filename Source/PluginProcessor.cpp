@@ -79,3 +79,8 @@ void CX5MProcessor::setStateInformation(const void* data, int bytes) {
     auto xml = getXmlFromBinary(data, bytes);
     if (xml && xml->hasTagName(state.state.getType())) state.replaceState(juce::ValueTree::fromXml(*xml));
 }
+
+juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
+{
+    return new CX5MRebornAudioProcessor();
+}
