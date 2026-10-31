@@ -1,1 +1,45 @@
 
+name: Build Windows VST3
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Download JUCE
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch master https://github.com/juce-framework/JUCE.git "$env:RUNNER_TEMP/JUCE"
+
+      - name: Configure
+        shell: pwsh
+        run: |
+          cmake -S . -B build -G "Visual Studio 17 2022" -A x64 "-DJUCE_DIR=$env:RUNNER_TEMP/JUCE"
+
+      - name: Compile plugin
+        shell: pwsh
+        run: |
+          cmake --build build --config Release --parallel 2
+
+      - name: Package VST3
+        shell: pwsh
+        run: |
+          $vst = Get-ChildItem -Path build -Filter '*.vst3' -Recurse | Where-Object { $_.PSIsContainer } | Select-Object -First 1
+          if (-not $vst) { throw 'No VST3 bundle found' }
+          New-Item -ItemType Directory -Force -Path package | Out-Null
+          Copy-Item -Path $vst.FullName -Destination package -Recurse
+
+      - name: Upload VST3
+        uses: actions/upload-artifact@v4
+        with:
+          name: CX5M-Reborn-Windows-VST3
+          path: package/
+          if-no-files-found: error
