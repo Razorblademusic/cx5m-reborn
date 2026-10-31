@@ -44,6 +44,9 @@ private:
     void noteOff(int note);
     void updateParameters();
     void tick();
+    void loadCassetteVoice(int index);
+    int lastBank = -1;
+    int activeBank = 0;
     static juce::AudioProcessorValueTreeState::ParameterLayout makeParams();
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(CX5MProcessor)
 };

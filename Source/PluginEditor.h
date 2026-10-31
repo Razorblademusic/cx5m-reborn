@@ -15,6 +15,8 @@ private:
     };
     std::vector<Control> controls;
     juce::ComboBox algorithm;
+    juce::ComboBox bank;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> bankAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> algorithmAttachment;
     juce::TextButton cassette{"CASSETTE IMPORT — COMING LATER"};
     void addControl(const juce::String& id, const juce::String& label);

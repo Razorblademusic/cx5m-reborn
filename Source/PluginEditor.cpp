@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include "CassetteBank.h"
 CX5MEditor::CX5MEditor(CX5MProcessor& p) : AudioProcessorEditor(&p), processor(p) {
     for (int i = 1; i <= 4; ++i) {
         auto s = juce::String(i);
@@ -9,6 +10,16 @@ CX5MEditor::CX5MEditor(CX5MProcessor& p) : AudioProcessorEditor(&p), processor(p
     algorithm.addItemList({"Algorithm 1", "Algorithm 2", "Algorithm 3", "Algorithm 4", "Algorithm 5", "Algorithm 6", "Algorithm 7", "Algorithm 8"}, 1);
     addAndMakeVisible(algorithm);
     algorithmAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(processor.state, "algorithm", algorithm);
+    bank.addItem("Prototype (v0.3)",1);
+    for(int i=0;i<48;++i) {
+        juce::String name;
+        // Name from the original 7-byte cassette record header.
+        const auto& r = cassetteBank::raw;
+        for(int j=0;j<7;++j) { auto c=r[static_cast<size_t>(i*64+j)]; if(c>=32 && c<=126) name += juce::String::charToString(static_cast<juce_wchar>(c)); }
+        bank.addItem(juce::String(i+1).paddedLeft('0',2)+"  "+name.trim(),i+2);
+    }
+    addAndMakeVisible(bank);
+    bankAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(processor.state,"bank",bank);
     cassette.setEnabled(false); addAndMakeVisible(cassette);
     setSize(860, 520);
 }
@@ -28,7 +39,7 @@ void CX5MEditor::paint(juce::Graphics& g) {
     g.setColour(juce::Colour(0xff80c8dc)); g.setFont(juce::Font(27.f, juce::Font::bold));
     g.drawText("CX5M  /  REBORN", 22, 12, 550, 42, juce::Justification::centredLeft);
     g.setColour(juce::Colours::lightgrey); g.setFont(13.f);
-    g.drawText("YM2151 OPM CORE  |  EXPERIMENTAL PARAMETER MAPPING", 24, 54, 800, 24, juce::Justification::centredLeft);
+    g.drawText("YM2151 CORE  |  48 RECOVERED CASSETTE VOICES (EXPERIMENTAL)", 24, 54, 800, 24, juce::Justification::centredLeft);
     for (int i = 0; i < 4; ++i) {
         auto r = juce::Rectangle<float>(20.f + i * 210.f, 105.f, 198.f, 250.f);
         g.setColour(juce::Colour(0xff263342)); g.fillRoundedRectangle(r, 8.f);
@@ -47,5 +58,6 @@ void CX5MEditor::resized() {
     controls[16].slider->setBounds(24, 390, 110, 90);
     controls[16].label->setBounds(24, 477, 110, 20);
     algorithm.setBounds(190, 412, 190, 32);
-    cassette.setBounds(480, 410, 345, 36);
+    bank.setBounds(415, 392, 410, 34);
+    cassette.setBounds(480, 450, 345, 36);
 }

@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "CassetteBank.h"
 #include <algorithm>
 #include <cmath>
 
@@ -7,6 +8,14 @@ juce::AudioProcessorValueTreeState::ParameterLayout CX5MProcessor::makeParams() 
     juce::AudioProcessorValueTreeState::ParameterLayout p;
     p.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"output",1}, "Output", juce::NormalisableRange<float>(0.f,1.f), .35f));
     p.add(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID{"algorithm",1}, "Algorithm", juce::StringArray{"Algorithm 1","Algorithm 2","Algorithm 3","Algorithm 4","Algorithm 5","Algorithm 6","Algorithm 7","Algorithm 8"}, 7));
+    juce::StringArray bankNames;
+    bankNames.add("Prototype (v0.3)");
+    for (int i=0;i<48;++i) {
+        juce::String name;
+        for(int j=0;j<7;++j) { auto c = cassetteBank::raw[static_cast<size_t>(i*64+j)]; if(c>=32 && c<=126) name += juce::String::charToString(static_cast<juce_wchar>(c)); }
+        bankNames.add(juce::String(i+1).paddedLeft('0',2) + "  " + name.trim());
+    }
+    p.add(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID{"bank",1}, "Cassette Voice", bankNames, 0));
     for (int i=1;i<=4;++i) {
         auto n=juce::String(i);
         p.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"ratio"+n,1},"OP"+n+" Ratio",juce::NormalisableRange<float>(.5f,16.f,.5f),1.f));
@@ -17,11 +26,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout CX5MProcessor::makeParams() 
     return p;
 }
 CX5MProcessor::CX5MProcessor() : AudioProcessor(BusesProperties().withOutput("Output",juce::AudioChannelSet::stereo(),true)), state(*this,nullptr,"CX5MState",makeParams()), chip(interface) {}
-void CX5MProcessor::write(uint8_t reg, uint8_t value)
-{
-    chip.write_address(reg);
-    chip.write_data(value);
-}
+void CX5MProcessor::write(uint8_t reg,uint8_t value) { chip.write_address(reg); chip.write_data(value); }
 void CX5MProcessor::prepareToPlay(double sr,int) {
     hostRate=std::max(1.0,sr);
     chip.reset();
@@ -39,9 +44,10 @@ void CX5MProcessor::prepareToPlay(double sr,int) {
             write(static_cast<uint8_t>(0x80+offset),31);
             write(static_cast<uint8_t>(0xa0+offset),0);
             write(static_cast<uint8_t>(0xc0+offset),0);
-            write(static_cast<uint8_t>(0xe0+offset),0x4f);
+            write(static_cast<uint8_t>(0xe0+offset),0x04);
         }
     }
+    lastBank = -1; activeBank = 0;
     updateParameters(); tick(); prev=next;
 }
 void CX5MProcessor::setPitch(int ch,int note) {
@@ -72,21 +78,62 @@ void CX5MProcessor::noteOn(int note,float velocity) {
     write(0x08,static_cast<uint8_t>(ch));
     voices[ch]={note,false,++counter,velocity,0};
     setPitch(ch,note);
-    // Velocity controls chip TL (not audio amplitude), set before key on.
+    // For recovered voices, use the original TL with a conservative velocity offset.
     for(int op=0;op<4;++op) {
+        if(activeBank>0) {
+            const size_t pos = static_cast<size_t>((activeBank-1)*64+16+op*8);
+            int base = cassetteBank::raw[pos] & 127;
+            int sensitivity = (cassetteBank::raw[pos+1] >> 4) & 7;
+            int tl = juce::jlimit(0,127,base + static_cast<int>((1.f-velocity)*sensitivity*5.f));
+            write(static_cast<uint8_t>(0x60+ch+op*8),static_cast<uint8_t>(tl));
+            continue;
+        }
         auto s=juce::String(op+1);
         float level=state.getRawParameterValue("level"+s)->load();
         int tl=juce::jlimit(0,127,static_cast<int>(std::round((1.f-level*velocity)*110.f)));
         write(static_cast<uint8_t>(0x60+ch+op*8),static_cast<uint8_t>(tl));
     }
-    write(0x08,static_cast<uint8_t>(0x78|ch));
+    uint8_t mask = activeBank>0 ? static_cast<uint8_t>(cassetteBank::raw[static_cast<size_t>((activeBank-1)*64+11)] & 0x78) : 0x78;
+    write(0x08,static_cast<uint8_t>(mask|ch));
 }
 void CX5MProcessor::noteOff(int note) {
     int ch=-1;
     for(int i=0;i<8;++i) if(voices[i].note==note&&!voices[i].released&&(ch<0||voices[i].age<voices[ch].age)) ch=i;
     if(ch>=0) {voices[ch].released=true;voices[ch].releaseSamples=static_cast<int>(hostRate*3.0);write(0x08,static_cast<uint8_t>(ch));}
 }
+void CX5MProcessor::loadCassetteVoice(int index) {
+    const size_t base = static_cast<size_t>((index-1)*64);
+    const auto& r = cassetteBank::raw;
+    // Mute existing notes before changing chip registers.
+    for(int ch=0;ch<8;++ch) { write(0x08,static_cast<uint8_t>(ch)); voices[ch] = {}; }
+    write(0x18,r[base+8]); // LFO frequency
+    write(0x19,static_cast<uint8_t>(r[base+9]&0x7f)); // AMD
+    write(0x19,static_cast<uint8_t>(0x80|(r[base+10]&0x7f))); // PMD
+    write(0x1b,static_cast<uint8_t>((r[base+14]>>5)&3)); // LFO waveform
+    for(int ch=0;ch<8;++ch) {
+        write(static_cast<uint8_t>(0x20+ch),r[base+12]); // L/R feedback algorithm
+        write(static_cast<uint8_t>(0x38+ch),r[base+13]); // PMS / AMS
+        for(int op=0;op<4;++op) {
+            const size_t o=base+16+static_cast<size_t>(op)*8;
+            const uint8_t slot=static_cast<uint8_t>(ch+op*8);
+            write(static_cast<uint8_t>(0x40+slot),r[o+3]&0x7f); // DT1/MUL
+            write(static_cast<uint8_t>(0x60+slot),r[o]&0x7f); // TL
+            write(static_cast<uint8_t>(0x80+slot),r[o+4]&0xdf); // KS/AR (bit 5 reserved)
+            write(static_cast<uint8_t>(0xa0+slot),r[o+5]&0x9f); // AM enable / D1R
+            write(static_cast<uint8_t>(0xc0+slot),r[o+6]&0x9f); // DT2 / D2R
+            write(static_cast<uint8_t>(0xe0+slot),r[o+7]); // SL / RR
+        }
+    }
+}
 void CX5MProcessor::updateParameters() {
+    int selected = juce::jlimit(0,48,static_cast<int>(state.getRawParameterValue("bank")->load()));
+    if(selected != lastBank) {
+        activeBank = selected; lastBank = selected;
+        if(selected>0) loadCassetteVoice(selected);
+        else { lastAlgorithm=-1; lastRatio.fill(-1); lastLevel.fill(-1); lastAttack.fill(-1); lastRelease.fill(-1); }
+    }
+    if(activeBank>0) return;
+
     int alg=juce::jlimit(0,7,static_cast<int>(state.getRawParameterValue("algorithm")->load()));
     if(alg!=lastAlgorithm) {for(int ch=0;ch<8;++ch) write(static_cast<uint8_t>(0x20+ch),static_cast<uint8_t>(0xc0|alg));lastAlgorithm=alg;}
     for(int op=0;op<4;++op) {
@@ -97,7 +144,7 @@ void CX5MProcessor::updateParameters() {
         double attack=state.getRawParameterValue("attack"+s)->load();
         double release=state.getRawParameterValue("release"+s)->load();
         int ar=juce::jlimit(1,31,static_cast<int>(std::round(31-11*std::log1p(attack*10))));
-        int rr = 4;
+        int rr=4;
         for(int ch=0;ch<8;++ch) {
             auto o=static_cast<uint8_t>(ch+op*8);
             if(ratio!=lastRatio[op]) write(static_cast<uint8_t>(0x40+o),static_cast<uint8_t>(ratio));
