@@ -39,7 +39,7 @@ void CX5MProcessor::prepareToPlay(double sr,int) {
             write(static_cast<uint8_t>(0x80+offset),31);
             write(static_cast<uint8_t>(0xa0+offset),0);
             write(static_cast<uint8_t>(0xc0+offset),0);
-            write(static_cast<uint8_t>(0xe0+offset),0x0f);
+            write(static_cast<uint8_t>(0xe0+offset),0x4f);
         }
     }
     updateParameters(); tick(); prev=next;
@@ -97,7 +97,7 @@ void CX5MProcessor::updateParameters() {
         double attack=state.getRawParameterValue("attack"+s)->load();
         double release=state.getRawParameterValue("release"+s)->load();
         int ar=juce::jlimit(1,31,static_cast<int>(std::round(31-11*std::log1p(attack*10))));
-        int rr=juce::jlimit(1,15,static_cast<int>(std::round(15-4*std::log1p(release*3))));
+        int rr = 4;
         for(int ch=0;ch<8;++ch) {
             auto o=static_cast<uint8_t>(ch+op*8);
             if(ratio!=lastRatio[op]) write(static_cast<uint8_t>(0x40+o),static_cast<uint8_t>(ratio));
