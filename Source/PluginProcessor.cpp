@@ -17,7 +17,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout CX5MProcessor::makeParams() 
     return p;
 }
 CX5MProcessor::CX5MProcessor() : AudioProcessor(BusesProperties().withOutput("Output",juce::AudioChannelSet::stereo(),true)), state(*this,nullptr,"CX5MState",makeParams()), chip(interface) {}
-void CX5MProcessor::write(uint8_t reg,uint8_t value) { chip.write(reg,value); }
+void CX5MProcessor::write(uint8_t reg, uint8_t value)
+{
+    chip.write_address(reg);
+    chip.write_data(value);
+}
 void CX5MProcessor::prepareToPlay(double sr,int) {
     hostRate=std::max(1.0,sr);
     chip.reset();
