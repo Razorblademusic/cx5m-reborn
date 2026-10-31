@@ -82,5 +82,5 @@ void CX5MProcessor::setStateInformation(const void* data, int bytes) {
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
-    return new CX5MRebornAudioProcessor();
+    return new CX5MProcessor();
 }
