@@ -40,7 +40,12 @@ private:
     int bend = 8192;
     void noteOn(int note, float velocity);
     void noteOff(int note);
-    float render(Voice& voice);
+    struct Params {
+        double ratio[4]{}, level[4]{}, attackCoeff[4]{}, releaseCoeff[4]{};
+        int algorithm = 0;
+        float output = 0.35f;
+    };
+    float render(Voice& voice, const Params& params);
     static juce::AudioProcessorValueTreeState::ParameterLayout makeParams();
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(CX5MProcessor)
 };
