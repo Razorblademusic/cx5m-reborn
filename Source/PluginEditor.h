@@ -16,6 +16,8 @@ private:
     std::vector<Control> controls;
     juce::ComboBox algorithm;
     juce::ComboBox bank;
+    juce::TextButton previousPatch{"<"}, nextPatch{">"};
+    juce::Label bankStatus;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> bankAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> algorithmAttachment;
     juce::TextButton cassette{"LOAD DECODED BANK (.BIN)"};

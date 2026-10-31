@@ -218,6 +218,7 @@ bool CX5MProcessor::importVoiceBank(const juce::File& file, juce::String& error)
     }
     std::shared_ptr<const BankData> immutable = candidate;
     std::atomic_store(&importedBank, immutable);
+    importedBankName = file.getFileName();
     // Force reload of currently selected patch on the audio thread.
     // No change to parameters or chip state from the GUI thread.
     importRevision.fetch_add(1, std::memory_order_release);
@@ -236,27 +237,44 @@ juce::String CX5MProcessor::getImportedVoiceName(int index) const {
     return name.trim();
 }
 
+bool CX5MProcessor::hasImportedBank() const noexcept {
+    return static_cast<bool>(std::atomic_load(&importedBank));
+}
+juce::String CX5MProcessor::getBankDisplayName() const {
+    return hasImportedBank() ? importedBankName : "Original Bank";
+}
 void CX5MProcessor::getStateInformation(juce::MemoryBlock& dest) {
     auto tree = state.copyState();
-    if (auto bank = std::atomic_load(&importedBank))
-        tree.setProperty("importedBankBase64", juce::MemoryBlock(bank->data(), bank->size()).toBase64Encoding(), nullptr);
-    auto xml = tree.createXml(); copyXmlToBinary(*xml, dest);
+    if (auto bank = std::atomic_load(&importedBank)) {
+        juce::ValueTree payload("CX5MImportedBank");
+        payload.setProperty("format", 1, nullptr);
+        payload.setProperty("filename", importedBankName, nullptr);
+        payload.setProperty("bytes", juce::MemoryBlock(bank->data(), bank->size()).toBase64Encoding(), nullptr);
+        tree.addChild(payload, -1, nullptr);
+    }
+    if (auto xml = tree.createXml()) copyXmlToBinary(*xml, dest);
 }
-void CX5MProcessor::setStateInformation(const void* data,int bytes) {
-    auto xml = getXmlFromBinary(data,bytes);
+void CX5MProcessor::setStateInformation(const void* data, int bytes) {
+    auto xml = getXmlFromBinary(data, bytes);
     if (!xml || !xml->hasTagName(state.state.getType())) return;
     auto tree = juce::ValueTree::fromXml(*xml);
-    auto encoded = tree.getProperty("importedBankBase64").toString();
+    auto payload = tree.getChildWithName("CX5MImportedBank");
+    // Also accept project states written by the first v0.5 release.
+    auto encoded = payload.isValid() ? payload.getProperty("bytes").toString()
+                                     : tree.getProperty("importedBankBase64").toString();
+    std::shared_ptr<const BankData> restored;
     if (encoded.isNotEmpty()) {
         juce::MemoryBlock block;
         if (block.fromBase64Encoding(encoded) && block.getSize() == 3072) {
-            auto bank = std::make_shared<BankData>();
-            std::memcpy(bank->data(), block.getData(), bank->size());
-            std::shared_ptr<const BankData> immutable = bank;
-            std::atomic_store(&importedBank, immutable);
-            importRevision.fetch_add(1, std::memory_order_release);
+            auto mutableBank = std::make_shared<BankData>();
+            std::memcpy(mutableBank->data(), block.getData(), mutableBank->size());
+            restored = mutableBank;
         }
     }
+    std::atomic_store(&importedBank, restored);
+    importedBankName = restored ? payload.getProperty("filename", "Imported Bank").toString() : juce::String();
+    importRevision.fetch_add(1, std::memory_order_release);
+    if (payload.isValid()) tree.removeChild(payload, nullptr);
     tree.removeProperty("importedBankBase64", nullptr);
     state.replaceState(tree);
 }

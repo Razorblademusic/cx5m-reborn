@@ -31,10 +31,13 @@ public:
     // Import a pre-decoded Yamaha 48 x 64-byte bank. WAV decoding is a separate step.
     bool importVoiceBank(const juce::File& file, juce::String& error);
     juce::String getImportedVoiceName(int index) const;
+    bool hasImportedBank() const noexcept;
+    juce::String getBankDisplayName() const;
 
 private:
     using BankData = std::array<uint8_t, 3072>;
     std::shared_ptr<const BankData> importedBank;
+    juce::String importedBankName;
     std::shared_ptr<const BankData> currentAudioBank;
     std::atomic<unsigned> importRevision{0};
     unsigned seenImportRevision = 0;
