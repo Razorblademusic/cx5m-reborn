@@ -59,7 +59,7 @@ void CX5MProcessor::setPitch(int ch, int note)
     // MIDI note C therefore uses key code 15
     // in the preceding YM2151 octave.
     constexpr int code[12] =
-        { 15, 0, 1, 2, 4, 5, 6, 8, 9, 10, 12, 13 };
+        { 14, 0, 1, 2, 4, 5, 6, 8, 9, 10, 12, 13 };
 
     double semis = (bend - 8192) / 8192.0 * 2.0;
     double pitch = juce::jlimit(0.0, 95.0, note + semis);
