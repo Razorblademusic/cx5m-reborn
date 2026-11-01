@@ -52,26 +52,43 @@ void CX5MProcessor::prepareToPlay(double sr,int) {
     currentAudioBank = std::atomic_load(&importedBank);
     updateParameters(); tick(); prev=next;
 }
-void CX5MProcessor::setPitch(int ch,int note) {
-    // YM2151 KC: octave in bits 4-6, semitone code with gaps at E/A.
-    constexpr int code[12]={0,1,2,4,5,6,8,9,10,12,13,14};
-    int n=juce::jlimit(0,95,note);
-    int octave=juce::jlimit(0,7,n/12-1);
-    int semitone=n%12;
-    write(static_cast<uint8_t>(0x28+ch),static_cast<uint8_t>((octave<<4)|code[semitone]));
-    // Fractional semitone pitch bend, 2-semitone range.
-    double semis=(bend-8192)/8192.0*2.0;
-    int fractionValue=static_cast<int>(std::round(semis*64.0));
-    int fine=juce::jlimit(0,63,fractionValue);
-    // Negative bend requires shifting the key code downward.
-    if(fractionValue<0) {
-        int bent=juce::jlimit(0,95,n+static_cast<int>(std::floor(semis)));
-        int oct=juce::jlimit(0,7,bent/12-1);
-        write(static_cast<uint8_t>(0x28+ch),static_cast<uint8_t>((oct<<4)|code[bent%12]));
-        fine=juce::jlimit(0,63,static_cast<int>(std::round((semis-std::floor(semis))*64)));
-    }
-    write(static_cast<uint8_t>(0x30+ch),static_cast<uint8_t>(fine<<2));
+
+void CX5MProcessor::setPitch(int ch, int note)
+{
+    // YM2151 key codes: C#=0, D=1, ... B=14.
+    // MIDI note C therefore uses key code 15
+    // in the preceding YM2151 octave.
+    constexpr int code[12] =
+        { 15, 0, 1, 2, 4, 5, 6, 8, 9, 10, 12, 13 };
+
+    double semis = (bend - 8192) / 8192.0 * 2.0;
+    double pitch = juce::jlimit(0.0, 95.0, note + semis);
+
+    int whole = static_cast<int>(std::floor(pitch));
+    double frac = pitch - whole;
+
+    int octave = whole / 12 - 1;
+
+    // C is represented by the final key code
+    // of the preceding YM2151 octave.
+    if (whole % 12 == 0)
+        --octave;
+
+    octave = juce::jlimit(0, 7, octave);
+
+    int keyCode = code[whole % 12];
+
+    write(static_cast<uint8_t>(0x28 + ch),
+          static_cast<uint8_t>((octave << 4) | keyCode));
+
+    int fine = juce::jlimit(
+        0, 63,
+        static_cast<int>(std::round(frac * 64.0)));
+
+    write(static_cast<uint8_t>(0x30 + ch),
+          static_cast<uint8_t>(fine << 2));
 }
+
 void CX5MProcessor::noteOn(int note,float velocity) {
     int ch=-1;
     for(int i=0;i<8;++i) if(voices[i].note<0) {ch=i;break;}
