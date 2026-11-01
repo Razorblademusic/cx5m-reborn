@@ -34,45 +34,58 @@ CX5MEditor::CX5MEditor(CX5MProcessor& p) : AudioProcessorEditor(&p), processor(p
     bankStatus.setJustificationType(juce::Justification::centredRight);
     addAndMakeVisible(bankStatus);
     refreshBankNames();
+    juce::PropertiesFile::Options options;
+    options.applicationName = "CX5MReborn";
+    options.filenameSuffix = "settings";
+    options.folderName = "CX5MReborn";
+    options.osxLibrarySubFolder = "Application Support";
+    options.storageFormat = juce::PropertiesFile::storeAsXML;
+    preferences = std::make_unique<juce::PropertiesFile>(options);
+
+    addAndMakeVisible(settings);
+    settings.onClick = [this] {
+        folderChooser = std::make_unique<juce::FileChooser>(
+            "Choose your default CX5M bank folder", defaultBankFolder());
+        juce::Component::SafePointer<CX5MEditor> safeThis(this);
+        folderChooser->launchAsync(
+            juce::FileBrowserComponent::openMode
+                | juce::FileBrowserComponent::canSelectDirectories,
+            [safeThis](const juce::FileChooser& fc) {
+                if (safeThis == nullptr) return;
+                const auto folder = fc.getResult();
+                if (!folder.isDirectory()) return;
+                safeThis->preferences->setValue("defaultBankFolder", folder.getFullPathName());
+                safeThis->preferences->saveIfNeeded();
+                safeThis->refreshFolderStatus();
+            });
+    };
+    folderStatus.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
+    folderStatus.setJustificationType(juce::Justification::centredLeft);
+    addAndMakeVisible(folderStatus);
+    refreshFolderStatus();
+
     addAndMakeVisible(cassette);
-    
-cassette.onClick = [this]
-{
-    chooser = std::make_unique<juce::FileChooser>(
-        "Choose a decoded 48-voice CX5M bank",
-        juce::File{},
-        "*.bin");
-
-    juce::Component::SafePointer<CX5MEditor> safeThis(this);
-
-    chooser->launchAsync(
-        juce::FileBrowserComponent::openMode
-            | juce::FileBrowserComponent::canSelectFiles,
-        [safeThis](const juce::FileChooser& fc)
-        {
-            if (safeThis == nullptr)
-                return;
-
-            auto file = fc.getResult();
-
-            if (!file.existsAsFile())
-                return;
-
-            juce::String error;
-
-            if (!safeThis->processor.importVoiceBank(file, error))
-            {
-                juce::AlertWindow::showMessageBoxAsync(
-                    juce::MessageBoxIconType::WarningIcon,
-                    "Bank import failed",
-                    error);
-            }
-            else
-            {
-                safeThis->refreshBankNames();
-            }
-        });
-};
+    cassette.onClick = [this] {
+        chooser = std::make_unique<juce::FileChooser>(
+            "Choose a decoded 48-voice CX5M bank", defaultBankFolder(), "*.bin");
+        juce::Component::SafePointer<CX5MEditor> safeThis(this);
+        chooser->launchAsync(
+            juce::FileBrowserComponent::openMode
+                | juce::FileBrowserComponent::canSelectFiles,
+            [safeThis](const juce::FileChooser& fc) {
+                if (safeThis == nullptr) return;
+                const auto file = fc.getResult();
+                if (!file.existsAsFile()) return;
+                juce::String error;
+                if (!safeThis->processor.importVoiceBank(file, error)) {
+                    juce::AlertWindow::showMessageBoxAsync(
+                        juce::MessageBoxIconType::WarningIcon,
+                        "Bank import failed", error);
+                } else {
+                    safeThis->refreshBankNames();
+                }
+            });
+    };
     setSize(860, 520);
 }
 void CX5MEditor::addControl(const juce::String& id, const juce::String& name) {
@@ -115,6 +128,8 @@ void CX5MEditor::resized() {
     nextPatch.setBounds(782, 392, 38, 34);
     bankStatus.setBounds(445, 426, 375, 22);
     cassette.setBounds(480, 450, 345, 36);
+    settings.setBounds(390, 450, 85, 36);
+    folderStatus.setBounds(395, 488, 430, 24);
 }
 
 void CX5MEditor::refreshBankNames() {
@@ -126,4 +141,20 @@ void CX5MEditor::refreshBankNames() {
     bank.setSelectedId(selected, juce::dontSendNotification);
     bankStatus.setText(processor.hasImportedBank() ? "LOADED: " + processor.getBankDisplayName()
                                                    : "ORIGINAL BANK", juce::dontSendNotification);
+}
+
+juce::File CX5MEditor::defaultBankFolder() const {
+    const juce::File fallback = juce::File::getSpecialLocation(
+        juce::File::userDocumentsDirectory);
+    if (!preferences) return fallback;
+    const auto path = preferences->getValue("defaultBankFolder");
+    if (path.isEmpty()) return fallback;
+    const juce::File chosen(path);
+    return chosen.isDirectory() ? chosen : fallback;
+}
+
+void CX5MEditor::refreshFolderStatus() {
+    folderStatus.setText("Bank folder: " + defaultBankFolder().getFullPathName(),
+                         juce::dontSendNotification);
+    folderStatus.setTooltip(defaultBankFolder().getFullPathName());
 }

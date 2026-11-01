@@ -21,6 +21,12 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> bankAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> algorithmAttachment;
     juce::TextButton cassette{"LOAD DECODED BANK (.BIN)"};
+    juce::TextButton settings{"SETTINGS"};
+    juce::Label folderStatus;
+    std::unique_ptr<juce::PropertiesFile> preferences;
+    std::unique_ptr<juce::FileChooser> folderChooser;
+    juce::File defaultBankFolder() const;
+    void refreshFolderStatus();
     std::unique_ptr<juce::FileChooser> chooser;
     void refreshBankNames();
     void addControl(const juce::String& id, const juce::String& label);

@@ -48,11 +48,9 @@ void CX5MProcessor::prepareToPlay(double sr,int) {
             write(static_cast<uint8_t>(0xe0+offset),0x04);
         }
     }
-   
-lastBank = -1; activeBank = 0;
-// Make sure the restored bank is available before loading the patch.
-currentAudioBank = std::atomic_load(&importedBank);
-updateParameters(); tick(); prev=next;
+    lastBank = -1; activeBank = 0;
+    currentAudioBank = std::atomic_load(&importedBank);
+    updateParameters(); tick(); prev=next;
 }
 void CX5MProcessor::setPitch(int ch,int note) {
     // YM2151 KC: octave in bits 4-6, semitone code with gaps at E/A.
