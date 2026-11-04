@@ -89,7 +89,7 @@ CX5MEditor::CX5MEditor(CX5MProcessor& p) : AudioProcessorEditor(&p), processor(p
     addAndMakeVisible(synthTab);
     addAndMakeVisible(librarianTab);
     synthTab.onClick = [this] { showTab(false); };
-    librarianTab.onClick = [this] { showTab(true); };
+    librarianTab.onClick = [this] { showTab(true); scanBankFolder(); };
     addAndMakeVisible(bankList);
     addAndMakeVisible(voiceList);
     addAndMakeVisible(rescanBanks);
@@ -97,7 +97,8 @@ CX5MEditor::CX5MEditor(CX5MProcessor& p) : AudioProcessorEditor(&p), processor(p
     librarianInfo.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
     librarianInfo.setText("Select a bank to load, then a voice to audition with MIDI.", juce::dontSendNotification);
     rescanBanks.onClick = [this] { scanBankFolder(); };
-    scanBankFolder();
+    // Do not scan the disk while the plugin editor is being constructed.
+    // The user can scan on opening the Librarian tab or pressing Refresh.
     showTab(false);
     setSize(860, 520);
 }
@@ -116,10 +117,8 @@ void CX5MEditor::paint(juce::Graphics& g) {
     g.fillAll(juce::Colour(0xff171e28));
     g.setColour(juce::Colour(0xff80c8dc)); g.setFont(juce::Font(27.f, juce::Font::bold));
     g.drawText("CX5M  /  REBORN", 22, 12, 550, 42, juce::Justification::centredLeft);
-    g.setColour(juce::Colour(0xff80c8dc)); g.setFont(juce::Font(13.f, juce::Font::bold));
-    g.drawText("v0.4.2  |  RECURSIVE SCAN TEST", 590, 18, 240, 25, juce::Justification::centredRight);
     g.setColour(juce::Colours::lightgrey); g.setFont(13.f);
-    g.drawText("YM2151 CORE  |  48 RECOVERED CASSETTE VOICES (EXPERIMENTAL)", 24, 54, 800, 24, juce::Justification::centredLeft);
+    g.drawText("YM2151 CORE  |  48 RECOVERED CASSETTE VOICES (EXPERIMENTAL)  |  v0.4.3", 24, 54, 800, 24, juce::Justification::centredLeft);
     for (int i = 0; i < 4; ++i) {
         auto r = juce::Rectangle<float>(20.f + i * 210.f, 105.f, 198.f, 250.f);
         g.setColour(juce::Colour(0xff263342)); g.fillRoundedRectangle(r, 8.f);
@@ -198,38 +197,20 @@ void CX5MEditor::VoiceListModel::selectedRowsChanged(int row) {
     if (row >= 0 && row < 48) owner.bank.setSelectedId(row + 2, juce::sendNotificationSync);
 }
 void CX5MEditor::scanBankFolder() {
-    // Discover into temporary collections before updating the list model.
-    // Rebuilding the live arrays while selection callbacks run can invalidate rows.
-    const auto root = defaultBankFolder();
-    juce::Array<juce::File> discovered;
-    if (root.isDirectory())
-        root.findChildFiles(discovered, juce::File::findFiles, true, "*.bin");
-
-    juce::StringArray names;
-    juce::Array<juce::File> bankFiles;
-    names.add("Built-in original bank");
-    bankFiles.add(juce::File());
-    juce::StringArray paths;
-    for (const auto& file : discovered) {
-        if (!file.existsAsFile() || file.getSize() != 3072) continue;
-        paths.add(file.getRelativePathFrom(root).replaceCharacter('\\', '/'));
+    availableBankNames.clear();
+    availableBankFiles.clear();
+    availableBankNames.add("Built-in original bank");
+    availableBankFiles.add(juce::File());
+    juce::Array<juce::File> files;
+    defaultBankFolder().findChildFiles(files, juce::File::findFiles, true, "*.bin");
+    for (const auto& file : files) {
+        if (file.getSize() != 3072) continue;
+        availableBankNames.add(file.getFileNameWithoutExtension());
+        availableBankFiles.add(file);
     }
-    paths.sort(true);
-    for (const auto& path : paths) {
-        const auto file = root.getChildFile(path);
-        if (!file.existsAsFile() || file.getSize() != 3072) continue;
-        names.add(path.endsWithIgnoreCase(".bin") ? path.dropLastCharacters(4) : path);
-        bankFiles.add(file);
-    }
-
-    // Clear the selection BEFORE replacing the underlying model data.
-    // A negative selection is ignored by selectSourceBank().
-    bankList.deselectAllRows();
-    availableBankNames.swapWith(names);
-    availableBankFiles.swapWith(bankFiles);
     bankList.updateContent();
-    bankList.selectRow(0);
     bankList.repaint();
+    if (bankList.getSelectedRow() < 0) bankList.selectRow(0);
 }
 void CX5MEditor::selectSourceBank(int row) {
     if (!juce::isPositiveAndBelow(row, availableBankFiles.size())) return;
