@@ -89,8 +89,8 @@ CX5MEditor::CX5MEditor(CX5MProcessor& p) : AudioProcessorEditor(&p), processor(p
     addAndMakeVisible(synthTab);
     addAndMakeVisible(librarianTab);
     addAndMakeVisible(editorTab);
-    synthTab.onClick = [this] { bankEditorVisible = false; showTab(false); };
-    librarianTab.onClick = [this] { bankEditorVisible = false; showTab(true); scanBankFolder(); };
+    synthTab.onClick = [this] { processor.stopVoicePreview(); bankEditorVisible = false; showTab(false); };
+    librarianTab.onClick = [this] { processor.stopVoicePreview(); bankEditorVisible = false; showTab(true); scanBankFolder(); };
     editorTab.onClick = [this] { bankEditorVisible = true; showTab(false); scanEditorSources(); };
     addAndMakeVisible(bankList);
     addAndMakeVisible(voiceList);
@@ -117,6 +117,38 @@ CX5MEditor::CX5MEditor(CX5MProcessor& p) : AudioProcessorEditor(&p), processor(p
     editorStatus.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
     editorStatus.setText("Select a source voice and a destination slot, then COPY.", juce::dontSendNotification);
     sourceBankChoice.onChange = [this] { loadEditorSource(sourceBankChoice.getSelectedId() - 1); };
+    sourceVoiceChoice.onChange = [this] {
+        if (bankEditorVisible) {
+            const int slot = sourceVoiceChoice.getSelectedId() - 1;
+            if (juce::isPositiveAndBelow(slot, 48)) {
+                processor.previewVoice(sourceBank.data() + slot * 64);
+                setEditorStatus("Audition source: " + voiceName(sourceBank.data() + slot * 64)
+                                + " — play your MIDI keyboard.");
+            }
+        }
+    };
+    auditionSource.onClick = [this] {
+        const int slot = sourceVoiceChoice.getSelectedId() - 1;
+        if (juce::isPositiveAndBelow(slot, 48)) {
+            processor.previewVoice(sourceBank.data() + slot * 64);
+            setEditorStatus("Audition source: " + voiceName(sourceBank.data() + slot * 64));
+        }
+    };
+    auditionDraft.onClick = [this] {
+        const int slot = draftList.getSelectedRow();
+        if (juce::isPositiveAndBelow(slot, 48)) {
+            processor.previewVoice(draftBank.data() + slot * 64);
+            setEditorStatus("Audition slot " + juce::String(slot + 1) + ": "
+                            + voiceName(draftBank.data() + slot * 64));
+        } else setEditorStatus("Select a destination slot first.");
+    };
+    stopAudition.onClick = [this] {
+        processor.stopVoicePreview();
+        setEditorStatus("Audition stopped; original project sound restored.");
+    };
+    addAndMakeVisible(auditionSource);
+    addAndMakeVisible(auditionDraft);
+    addAndMakeVisible(stopAudition);
     copyVoice.onClick = [this] {
         const int from = sourceVoiceChoice.getSelectedId() - 1;
         const int to = draftList.getSelectedRow();
@@ -194,7 +226,7 @@ void CX5MEditor::paint(juce::Graphics& g) {
     g.setColour(juce::Colour(0xff80c8dc)); g.setFont(juce::Font(27.f, juce::Font::bold));
     g.drawText("CX5M  /  REBORN", 22, 12, 550, 42, juce::Justification::centredLeft);
     g.setColour(juce::Colours::lightgrey); g.setFont(13.f);
-    g.drawText("YM2151 CORE  |  48 RECOVERED CASSETTE VOICES (EXPERIMENTAL)  |  v0.5.0", 24, 54, 800, 24, juce::Justification::centredLeft);
+    g.drawText("YM2151 CORE  |  48 RECOVERED CASSETTE VOICES (EXPERIMENTAL)  |  v0.5.1", 24, 54, 800, 24, juce::Justification::centredLeft);
     if (!librarianVisible && !bankEditorVisible) for (int i = 0; i < 4; ++i) {
         auto r = juce::Rectangle<float>(20.f + i * 210.f, 105.f, 198.f, 250.f);
         g.setColour(juce::Colour(0xff263342)); g.fillRoundedRectangle(r, 8.f);
@@ -202,6 +234,8 @@ void CX5MEditor::paint(juce::Graphics& g) {
         g.drawText("OPERATOR " + juce::String(i + 1), r.toNearestInt().removeFromTop(32), juce::Justification::centred);
     }
 }
+CX5MEditor::~CX5MEditor() { processor.stopVoicePreview(); }
+
 void CX5MEditor::resized() {
     synthTab.setBounds(465, 16, 110, 35);
     librarianTab.setBounds(585, 16, 115, 35);
@@ -209,9 +243,12 @@ void CX5MEditor::resized() {
     editorInstructions.setBounds(25, 95, 810, 24);
     sourceBankChoice.setBounds(25, 132, 345, 32);
     sourceVoiceChoice.setBounds(25, 180, 345, 32);
-    copyVoice.setBounds(25, 242, 345, 38);
-    swapUp.setBounds(25, 310, 165, 35);
-    swapDown.setBounds(205, 310, 165, 35);
+    auditionSource.setBounds(25, 225, 165, 34);
+    auditionDraft.setBounds(205, 225, 165, 34);
+    copyVoice.setBounds(25, 268, 345, 38);
+    stopAudition.setBounds(25, 352, 345, 26);
+    swapUp.setBounds(25, 312, 165, 35);
+    swapDown.setBounds(205, 312, 165, 35);
     loadDraft.setBounds(25, 375, 165, 38);
     saveDraft.setBounds(205, 375, 165, 38);
     draftList.setBounds(400, 128, 430, 300);
@@ -375,6 +412,9 @@ void CX5MEditor::showTab(bool librarian) {
     const bool edit = bankEditorVisible;
     sourceBankChoice.setVisible(edit);
     sourceVoiceChoice.setVisible(edit);
+    auditionSource.setVisible(edit);
+    auditionDraft.setVisible(edit);
+    stopAudition.setVisible(edit);
     draftList.setVisible(edit);
     copyVoice.setVisible(edit);
     swapUp.setVisible(edit);
@@ -458,6 +498,10 @@ void CX5MEditor::loadEditorSource(int row) {
         sourceBank = candidate;
     }
     refreshSourceVoices();
+    if (bankEditorVisible) {
+        const int slot = sourceVoiceChoice.getSelectedId() - 1;
+        if (juce::isPositiveAndBelow(slot, 48)) processor.previewVoice(sourceBank.data() + slot * 64);
+    }
 }
 
 void CX5MEditor::refreshSourceVoices() {

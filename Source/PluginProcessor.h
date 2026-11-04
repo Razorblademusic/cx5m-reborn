@@ -33,11 +33,14 @@ public:
     juce::String getImportedVoiceName(int index) const;
     bool hasImportedBank() const noexcept;
     void restoreBuiltInBank();
+    void previewVoice(const uint8_t* record);
+    void stopVoicePreview();
     juce::String getBankDisplayName() const;
 
 private:
     using BankData = std::array<uint8_t, 3072>;
     std::shared_ptr<const BankData> importedBank;
+    std::shared_ptr<const BankData> previewBank;
     juce::String importedBankName;
     std::shared_ptr<const BankData> currentAudioBank;
     std::atomic<unsigned> importRevision{0};

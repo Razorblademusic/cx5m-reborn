@@ -145,7 +145,7 @@ void CX5MProcessor::loadCassetteVoice(int index) {
     }
 }
 void CX5MProcessor::updateParameters() {
-    int selected = juce::jlimit(0,48,static_cast<int>(state.getRawParameterValue("bank")->load()));
+    int selected = std::atomic_load(&previewBank) ? 1 : juce::jlimit(0,48,static_cast<int>(state.getRawParameterValue("bank")->load()));
     if(selected != lastBank || seenImportRevision != importRevision.load(std::memory_order_acquire)) {
         seenImportRevision = importRevision.load(std::memory_order_relaxed);
         activeBank = selected; lastBank = selected;
@@ -185,7 +185,8 @@ void CX5MProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::MidiBuff
     juce::ScopedNoDenormals guard;
     buffer.clear();
     // Take an immutable bank snapshot once per audio block; no disk I/O or locks here.
-    currentAudioBank = std::atomic_load(&importedBank);
+    auto preview = std::atomic_load(&previewBank);
+    currentAudioBank = preview ? preview : std::atomic_load(&importedBank);
     updateParameters();
     auto it=midi.cbegin();
     double step=nativeRate/hostRate;
@@ -243,6 +244,20 @@ bool CX5MProcessor::importVoiceBank(const juce::File& file, juce::String& error)
     return true;
 }
 
+void CX5MProcessor::previewVoice(const uint8_t* record) {
+    // Temporary audition voice: independent of project state and the imported bank.
+    // Reuse slot 1 so the existing chip mapping and MIDI handling remain unchanged.
+    auto candidate = std::make_shared<BankData>(cassetteBank::raw);
+    std::copy_n(record, 64, candidate->data());
+    std::shared_ptr<const BankData> immutable = candidate;
+    std::atomic_store(&previewBank, immutable);
+    importRevision.fetch_add(1, std::memory_order_release);
+}
+void CX5MProcessor::stopVoicePreview() {
+    std::atomic_store(&previewBank, std::shared_ptr<const BankData>{});
+    importRevision.fetch_add(1, std::memory_order_release);
+}
+
 juce::String CX5MProcessor::getImportedVoiceName(int index) const {
     auto bank = std::atomic_load(&importedBank);
     const auto& data = bank ? *bank : cassetteBank::raw;
@@ -279,6 +294,7 @@ void CX5MProcessor::getStateInformation(juce::MemoryBlock& dest) {
     if (auto xml = tree.createXml()) copyXmlToBinary(*xml, dest);
 }
 void CX5MProcessor::setStateInformation(const void* data, int bytes) {
+    stopVoicePreview();
     auto xml = getXmlFromBinary(data, bytes);
     if (!xml || !xml->hasTagName(state.state.getType())) return;
     auto tree = juce::ValueTree::fromXml(*xml);

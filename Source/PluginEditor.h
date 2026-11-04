@@ -4,6 +4,7 @@
 class CX5MEditor final : public juce::AudioProcessorEditor {
 public:
     explicit CX5MEditor(CX5MProcessor&);
+    ~CX5MEditor() override;
     void resized() override;
     void paint(juce::Graphics&) override;
 private:
@@ -66,6 +67,7 @@ private:
     juce::ComboBox sourceBankChoice, sourceVoiceChoice;
     juce::Label editorInstructions, editorStatus;
     juce::TextButton copyVoice{"COPY TO SELECTED SLOT"};
+    juce::TextButton auditionSource{"AUDITION SOURCE"}, auditionDraft{"AUDITION SLOT"}, stopAudition{"STOP AUDITION"};
     juce::TextButton swapUp{"MOVE UP"}, swapDown{"MOVE DOWN"};
     juce::TextButton loadDraft{"OPEN BANK .BIN"}, saveDraft{"SAVE BANK .BIN"};
     std::unique_ptr<juce::FileChooser> draftChooser;
