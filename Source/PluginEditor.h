@@ -31,10 +31,6 @@ private:
     void refreshBankNames();
     void addControl(const juce::String& id, const juce::String& label);
     juce::TextButton synthTab{"SYNTH"}, librarianTab{"LIBRARIAN"};
-    juce::ListBox bankList{"Available banks", &bankModel};
-    juce::ListBox voiceList{"Voices", &voiceModel};
-    juce::TextButton rescanBanks{"REFRESH BANKS"};
-    juce::Label librarianInfo;
     juce::StringArray availableBankNames;
     juce::Array<juce::File> availableBankFiles;
     bool librarianVisible = false;
@@ -52,6 +48,11 @@ private:
         void paintListBoxItem(int row, juce::Graphics& g, int w, int h, bool selected) override;
         void selectedRowsChanged(int row) override;
     } voiceModel{*this};
+    // Models must be constructed before the ListBoxes that reference them.
+    juce::ListBox bankList{"Available banks", &bankModel};
+    juce::ListBox voiceList{"Voices", &voiceModel};
+    juce::TextButton rescanBanks{"REFRESH BANKS"};
+    juce::Label librarianInfo;
     void scanBankFolder();
     void showTab(bool librarian);
     void selectSourceBank(int row);

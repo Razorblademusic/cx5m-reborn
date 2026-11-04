@@ -118,7 +118,7 @@ void CX5MEditor::paint(juce::Graphics& g) {
     g.setColour(juce::Colour(0xff80c8dc)); g.setFont(juce::Font(27.f, juce::Font::bold));
     g.drawText("CX5M  /  REBORN", 22, 12, 550, 42, juce::Justification::centredLeft);
     g.setColour(juce::Colours::lightgrey); g.setFont(13.f);
-    g.drawText("YM2151 CORE  |  48 RECOVERED CASSETTE VOICES (EXPERIMENTAL)  |  v0.4.3", 24, 54, 800, 24, juce::Justification::centredLeft);
+    g.drawText("YM2151 CORE  |  48 RECOVERED CASSETTE VOICES (EXPERIMENTAL)  |  v0.4.4", 24, 54, 800, 24, juce::Justification::centredLeft);
     for (int i = 0; i < 4; ++i) {
         auto r = juce::Rectangle<float>(20.f + i * 210.f, 105.f, 198.f, 250.f);
         g.setColour(juce::Colour(0xff263342)); g.fillRoundedRectangle(r, 8.f);
@@ -210,7 +210,8 @@ void CX5MEditor::scanBankFolder() {
     }
     bankList.updateContent();
     bankList.repaint();
-    if (bankList.getSelectedRow() < 0) bankList.selectRow(0);
+    // Do not automatically select row 0: that calls restoreBuiltInBank()
+    // and silently replaces a bank restored from the saved REAPER project.
 }
 void CX5MEditor::selectSourceBank(int row) {
     if (!juce::isPositiveAndBelow(row, availableBankFiles.size())) return;
