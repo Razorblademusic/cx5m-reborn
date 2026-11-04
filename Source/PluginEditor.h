@@ -30,10 +30,11 @@ private:
     std::unique_ptr<juce::FileChooser> chooser;
     void refreshBankNames();
     void addControl(const juce::String& id, const juce::String& label);
-    juce::TextButton synthTab{"SYNTH"}, librarianTab{"LIBRARIAN"};
+    juce::TextButton synthTab{"SYNTH"}, librarianTab{"LIBRARIAN"}, editorTab{"BANK EDITOR"};
     juce::StringArray availableBankNames;
     juce::Array<juce::File> availableBankFiles;
     bool librarianVisible = false;
+    bool bankEditorVisible = false;
     bool synchronisingLibrarianSelection = false;
     struct BankListModel : juce::ListBoxModel {
         CX5MEditor& owner;
@@ -58,5 +59,30 @@ private:
     void showTab(bool librarian);
     void selectSourceBank(int row);
     void synchroniseLibrarianToLoadedVoice();
+    // Bank editor keeps an independent 48 x 64-byte destination bank.
+    // No changes to the live synth or its saved project state until the user imports an exported BIN.
+    std::array<uint8_t, 3072> draftBank{};
+    std::array<uint8_t, 3072> sourceBank{};
+    juce::ComboBox sourceBankChoice, sourceVoiceChoice;
+    juce::Label editorInstructions, editorStatus;
+    juce::TextButton copyVoice{"COPY TO SELECTED SLOT"};
+    juce::TextButton swapUp{"MOVE UP"}, swapDown{"MOVE DOWN"};
+    juce::TextButton loadDraft{"OPEN BANK .BIN"}, saveDraft{"SAVE BANK .BIN"};
+    std::unique_ptr<juce::FileChooser> draftChooser;
+    struct DraftListModel : juce::ListBoxModel {
+        CX5MEditor& owner;
+        explicit DraftListModel(CX5MEditor& e) : owner(e) {}
+        int getNumRows() override { return 48; }
+        void paintListBoxItem(int row, juce::Graphics& g, int w, int h, bool selected) override;
+    } draftModel{*this};
+    juce::ListBox draftList{"Destination bank", &draftModel};
+    void scanEditorSources();
+    void loadEditorSource(int row);
+    void refreshSourceVoices();
+    void refreshDraftList();
+    static juce::String voiceName(const uint8_t* bytes);
+    static bool readDecodedBank(const juce::File& file, std::array<uint8_t,3072>& dest, juce::String& error);
+    void setEditorStatus(const juce::String& message);
+
 
 };
