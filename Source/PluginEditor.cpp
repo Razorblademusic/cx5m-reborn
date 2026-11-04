@@ -86,6 +86,19 @@ CX5MEditor::CX5MEditor(CX5MProcessor& p) : AudioProcessorEditor(&p), processor(p
                 }
             });
     };
+    addAndMakeVisible(synthTab);
+    addAndMakeVisible(librarianTab);
+    synthTab.onClick = [this] { showTab(false); };
+    librarianTab.onClick = [this] { showTab(true); };
+    addAndMakeVisible(bankList);
+    addAndMakeVisible(voiceList);
+    addAndMakeVisible(rescanBanks);
+    addAndMakeVisible(librarianInfo);
+    librarianInfo.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
+    librarianInfo.setText("Select a bank to load, then a voice to audition with MIDI.", juce::dontSendNotification);
+    rescanBanks.onClick = [this] { scanBankFolder(); };
+    scanBankFolder();
+    showTab(false);
     setSize(860, 520);
 }
 void CX5MEditor::addControl(const juce::String& id, const juce::String& name) {
@@ -113,6 +126,12 @@ void CX5MEditor::paint(juce::Graphics& g) {
     }
 }
 void CX5MEditor::resized() {
+    synthTab.setBounds(590, 16, 115, 35);
+    librarianTab.setBounds(715, 16, 125, 35);
+    bankList.setBounds(25, 115, 355, 315);
+    voiceList.setBounds(400, 115, 435, 315);
+    rescanBanks.setBounds(25, 448, 190, 35);
+    librarianInfo.setBounds(230, 448, 610, 35);
     for (int i = 0; i < 16; ++i) {
         int op = i / 4, n = i % 4;
         int x = 27 + op * 210 + (n % 2) * 94;
@@ -157,4 +176,74 @@ void CX5MEditor::refreshFolderStatus() {
     folderStatus.setText("Bank folder: " + defaultBankFolder().getFullPathName(),
                          juce::dontSendNotification);
     folderStatus.setTooltip(defaultBankFolder().getFullPathName());
+}
+
+void CX5MEditor::BankListModel::paintListBoxItem(int row, juce::Graphics& g, int w, int h, bool selected) {
+    if (selected) g.fillAll(juce::Colour(0xff354c62));
+    g.setColour(juce::Colours::white);
+    if (juce::isPositiveAndBelow(row, owner.availableBankNames.size()))
+        g.drawText(owner.availableBankNames[row], 8, 0, w - 12, h, juce::Justification::centredLeft);
+}
+void CX5MEditor::BankListModel::selectedRowsChanged(int row) { owner.selectSourceBank(row); }
+void CX5MEditor::VoiceListModel::paintListBoxItem(int row, juce::Graphics& g, int w, int h, bool selected) {
+    if (selected) g.fillAll(juce::Colour(0xff354c62));
+    g.setColour(juce::Colours::white);
+    if (row >= 0 && row < 48)
+        g.drawText(juce::String(row + 1).paddedLeft('0', 2) + "   " + owner.processor.getImportedVoiceName(row),
+                   8, 0, w - 12, h, juce::Justification::centredLeft);
+}
+void CX5MEditor::VoiceListModel::selectedRowsChanged(int row) {
+    if (row >= 0 && row < 48) owner.bank.setSelectedId(row + 2, juce::sendNotificationSync);
+}
+void CX5MEditor::scanBankFolder() {
+    availableBankNames.clear();
+    availableBankFiles.clear();
+    availableBankNames.add("Built-in original bank");
+    availableBankFiles.add(juce::File());
+    juce::Array<juce::File> files;
+    defaultBankFolder().findChildFiles(files, juce::File::findFiles, false, "*.bin");
+    for (const auto& file : files) {
+        if (file.getSize() != 3072) continue;
+        availableBankNames.add(file.getFileNameWithoutExtension());
+        availableBankFiles.add(file);
+    }
+    bankList.updateContent();
+    bankList.repaint();
+    if (bankList.getSelectedRow() < 0) bankList.selectRow(0);
+}
+void CX5MEditor::selectSourceBank(int row) {
+    if (!juce::isPositiveAndBelow(row, availableBankFiles.size())) return;
+    const auto file = availableBankFiles.getReference(row);
+    if (row == 0) {
+        processor.restoreBuiltInBank();
+    } else {
+        juce::String error;
+        if (!processor.importVoiceBank(file, error)) {
+            juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon,
+                                                    "Bank import failed", error);
+            return;
+        }
+    }
+    refreshBankNames();
+    voiceList.updateContent();
+    voiceList.repaint();
+    voiceList.selectRow(0);
+    librarianInfo.setText("Loaded: " + availableBankNames[row], juce::dontSendNotification);
+}
+void CX5MEditor::showTab(bool librarian) {
+    librarianVisible = librarian;
+    bankList.setVisible(librarian);
+    voiceList.setVisible(librarian);
+    rescanBanks.setVisible(librarian);
+    librarianInfo.setVisible(librarian);
+    for (auto& c : controls) { c.slider->setVisible(!librarian); c.label->setVisible(!librarian); }
+    algorithm.setVisible(!librarian);
+    bank.setVisible(!librarian);
+    previousPatch.setVisible(!librarian);
+    nextPatch.setVisible(!librarian);
+    bankStatus.setVisible(!librarian);
+    cassette.setVisible(!librarian);
+    settings.setVisible(!librarian);
+    folderStatus.setVisible(!librarian);
+    repaint();
 }

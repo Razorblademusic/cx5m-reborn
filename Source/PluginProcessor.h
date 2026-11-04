@@ -32,6 +32,7 @@ public:
     bool importVoiceBank(const juce::File& file, juce::String& error);
     juce::String getImportedVoiceName(int index) const;
     bool hasImportedBank() const noexcept;
+    void restoreBuiltInBank();
     juce::String getBankDisplayName() const;
 
 private:

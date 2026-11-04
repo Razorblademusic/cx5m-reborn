@@ -255,6 +255,12 @@ juce::String CX5MProcessor::getImportedVoiceName(int index) const {
     return name.trim();
 }
 
+void CX5MProcessor::restoreBuiltInBank() {
+    std::atomic_store(&importedBank, std::shared_ptr<const BankData>{});
+    importedBankName.clear();
+    importRevision.fetch_add(1, std::memory_order_release);
+}
+
 bool CX5MProcessor::hasImportedBank() const noexcept {
     return static_cast<bool>(std::atomic_load(&importedBank));
 }

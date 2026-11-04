@@ -30,4 +30,30 @@ private:
     std::unique_ptr<juce::FileChooser> chooser;
     void refreshBankNames();
     void addControl(const juce::String& id, const juce::String& label);
+    juce::TextButton synthTab{"SYNTH"}, librarianTab{"LIBRARIAN"};
+    juce::ListBox bankList{"Available banks", &bankModel};
+    juce::ListBox voiceList{"Voices", &voiceModel};
+    juce::TextButton rescanBanks{"REFRESH BANKS"};
+    juce::Label librarianInfo;
+    juce::StringArray availableBankNames;
+    juce::Array<juce::File> availableBankFiles;
+    bool librarianVisible = false;
+    struct BankListModel : juce::ListBoxModel {
+        CX5MEditor& owner;
+        explicit BankListModel(CX5MEditor& e) : owner(e) {}
+        int getNumRows() override { return owner.availableBankNames.size(); }
+        void paintListBoxItem(int row, juce::Graphics& g, int w, int h, bool selected) override;
+        void selectedRowsChanged(int row) override;
+    } bankModel{*this};
+    struct VoiceListModel : juce::ListBoxModel {
+        CX5MEditor& owner;
+        explicit VoiceListModel(CX5MEditor& e) : owner(e) {}
+        int getNumRows() override { return 48; }
+        void paintListBoxItem(int row, juce::Graphics& g, int w, int h, bool selected) override;
+        void selectedRowsChanged(int row) override;
+    } voiceModel{*this};
+    void scanBankFolder();
+    void showTab(bool librarian);
+    void selectSourceBank(int row);
+
 };
