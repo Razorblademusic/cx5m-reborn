@@ -118,8 +118,8 @@ void CX5MEditor::paint(juce::Graphics& g) {
     g.setColour(juce::Colour(0xff80c8dc)); g.setFont(juce::Font(27.f, juce::Font::bold));
     g.drawText("CX5M  /  REBORN", 22, 12, 550, 42, juce::Justification::centredLeft);
     g.setColour(juce::Colours::lightgrey); g.setFont(13.f);
-    g.drawText("YM2151 CORE  |  48 RECOVERED CASSETTE VOICES (EXPERIMENTAL)  |  v0.4.4", 24, 54, 800, 24, juce::Justification::centredLeft);
-    for (int i = 0; i < 4; ++i) {
+    g.drawText("YM2151 CORE  |  48 RECOVERED CASSETTE VOICES (EXPERIMENTAL)  |  v0.4.5", 24, 54, 800, 24, juce::Justification::centredLeft);
+    if (!librarianVisible) for (int i = 0; i < 4; ++i) {
         auto r = juce::Rectangle<float>(20.f + i * 210.f, 105.f, 198.f, 250.f);
         g.setColour(juce::Colour(0xff263342)); g.fillRoundedRectangle(r, 8.f);
         g.setColour(juce::Colour(0xff80c8dc)); g.setFont(17.f);
@@ -185,7 +185,9 @@ void CX5MEditor::BankListModel::paintListBoxItem(int row, juce::Graphics& g, int
     if (juce::isPositiveAndBelow(row, owner.availableBankNames.size()))
         g.drawText(owner.availableBankNames[row], 8, 0, w - 12, h, juce::Justification::centredLeft);
 }
-void CX5MEditor::BankListModel::selectedRowsChanged(int row) { owner.selectSourceBank(row); }
+void CX5MEditor::BankListModel::selectedRowsChanged(int row) {
+    if (!owner.synchronisingLibrarianSelection) owner.selectSourceBank(row);
+}
 void CX5MEditor::VoiceListModel::paintListBoxItem(int row, juce::Graphics& g, int w, int h, bool selected) {
     if (selected) g.fillAll(juce::Colour(0xff354c62));
     g.setColour(juce::Colours::white);
@@ -194,7 +196,8 @@ void CX5MEditor::VoiceListModel::paintListBoxItem(int row, juce::Graphics& g, in
                    8, 0, w - 12, h, juce::Justification::centredLeft);
 }
 void CX5MEditor::VoiceListModel::selectedRowsChanged(int row) {
-    if (row >= 0 && row < 48) owner.bank.setSelectedId(row + 2, juce::sendNotificationSync);
+    if (!owner.synchronisingLibrarianSelection && row >= 0 && row < 48)
+        owner.bank.setSelectedId(row + 2, juce::sendNotificationSync);
 }
 void CX5MEditor::scanBankFolder() {
     availableBankNames.clear();
@@ -210,9 +213,42 @@ void CX5MEditor::scanBankFolder() {
     }
     bankList.updateContent();
     bankList.repaint();
-    // Do not automatically select row 0: that calls restoreBuiltInBank()
-    // and silently replaces a bank restored from the saved REAPER project.
+    // Reflect the restored sound in the GUI without importing or selecting a new bank.
+    synchroniseLibrarianToLoadedVoice();
 }
+void CX5MEditor::synchroniseLibrarianToLoadedVoice() {
+    // JUCE ListBox::selectRow invokes selectedRowsChanged; suppress both
+    // callbacks so that synchronisation never changes the processor's bank.
+    const juce::ScopedValueSetter<bool> guard(synchronisingLibrarianSelection, true);
+    int matchingRow = -1;
+    if (!processor.hasImportedBank()) {
+        matchingRow = 0;
+    } else {
+        // Saved project state stores the original filename, not the full path.
+        // Only highlight a file when the match is unambiguous.
+        const auto loadedName = processor.getBankDisplayName();
+        for (int i = 1; i < availableBankFiles.size(); ++i) {
+            if (availableBankFiles.getReference(i).getFileName().equalsIgnoreCase(loadedName)) {
+                if (matchingRow != -1) { matchingRow = -1; break; }
+                matchingRow = i;
+            }
+        }
+    }
+    bankList.deselectAllRows();
+    if (matchingRow >= 0) bankList.selectRow(matchingRow);
+    // The voice list reads the current bank directly from the processor,
+    // including a bank embedded in a saved project but no longer on disk.
+    voiceList.updateContent();
+    const auto* choice = processor.state.getRawParameterValue("bank");
+    const int selectedVoice = choice != nullptr ? static_cast<int>(choice->load()) - 1 : -1;
+    voiceList.deselectAllRows();
+    if (juce::isPositiveAndBelow(selectedVoice, 48)) voiceList.selectRow(selectedVoice);
+    voiceList.repaint();
+    librarianInfo.setText("Current: " + processor.getBankDisplayName()
+                          + "  |  Choose a bank to load a different sound set.",
+                          juce::dontSendNotification);
+}
+
 void CX5MEditor::selectSourceBank(int row) {
     if (!juce::isPositiveAndBelow(row, availableBankFiles.size())) return;
     const auto file = availableBankFiles.getReference(row);

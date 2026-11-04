@@ -34,6 +34,7 @@ private:
     juce::StringArray availableBankNames;
     juce::Array<juce::File> availableBankFiles;
     bool librarianVisible = false;
+    bool synchronisingLibrarianSelection = false;
     struct BankListModel : juce::ListBoxModel {
         CX5MEditor& owner;
         explicit BankListModel(CX5MEditor& e) : owner(e) {}
@@ -56,5 +57,6 @@ private:
     void scanBankFolder();
     void showTab(bool librarian);
     void selectSourceBank(int row);
+    void synchroniseLibrarianToLoadedVoice();
 
 };
