@@ -190,7 +190,7 @@ void CX5MProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::MidiBuff
     updateParameters();
     auto it=midi.cbegin();
     double step=nativeRate/hostRate;
-    float gain=state.getRawParameterValue("output")->load()*.5f;
+    float gain=(silentPreview.load(std::memory_order_acquire) ? 0.f : state.getRawParameterValue("output")->load()*.5f);
     for(int i=0;i<buffer.getNumSamples();++i) {
         while(it!=midi.cend() && (*it).samplePosition<=i) {
             auto m=(*it).getMessage();
@@ -245,6 +245,7 @@ bool CX5MProcessor::importVoiceBank(const juce::File& file, juce::String& error)
 }
 
 void CX5MProcessor::previewVoice(const uint8_t* record) {
+    silentPreview.store(false, std::memory_order_release);
     // Temporary audition voice: independent of project state and the imported bank.
     // Reuse slot 1 so the existing chip mapping and MIDI handling remain unchanged.
     auto candidate = std::make_shared<BankData>(cassetteBank::raw);
@@ -253,7 +254,11 @@ void CX5MProcessor::previewVoice(const uint8_t* record) {
     std::atomic_store(&previewBank, immutable);
     importRevision.fetch_add(1, std::memory_order_release);
 }
+void CX5MProcessor::previewSilence() {
+    silentPreview.store(true, std::memory_order_release);
+}
 void CX5MProcessor::stopVoicePreview() {
+    silentPreview.store(false, std::memory_order_release);
     std::atomic_store(&previewBank, std::shared_ptr<const BankData>{});
     importRevision.fetch_add(1, std::memory_order_release);
 }
