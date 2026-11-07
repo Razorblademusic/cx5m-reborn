@@ -72,6 +72,17 @@ private:
     std::array<uint8_t, 3072> draftBank{};
     std::array<uint8_t, 3072> sourceBank{};
     juce::ComboBox sourceBankChoice, sourceVoiceChoice;
+    struct SourceListModel : juce::ListBoxModel {
+        CX5MEditor& owner;
+        explicit SourceListModel(CX5MEditor& e) : owner(e) {}
+        int getNumRows() override { return 48; }
+        void paintListBoxItem(int, juce::Graphics&, int, int, bool) override;
+        void selectedRowsChanged(int) override;
+    } sourceModel{*this};
+    juce::ListBox sourceList{"Source bank", &sourceModel};
+    bool synchronisingSourceSelection = false;
+    bool draftDirty = false;
+    void markDraftDirty();
     juce::Label editorInstructions, editorStatus, destinationBankLabel;
     juce::String destinationBankName{"Unsaved custom bank"};
     enum class AuditionMode { stopped, source, slot };
@@ -81,11 +92,11 @@ private:
     void updateAuditionButtons();
     void updateDestinationLabel();
     static bool isEmptyVoice(const uint8_t* record);
-    juce::TextButton copyVoice{"COPY TO SELECTED SLOT"};
+    juce::TextButton copyVoice{"COPY >"};
     juce::TextButton previousSource{"<"}, nextSource{">"}, renameSlot{"RENAME SLOT"};
     juce::TextButton auditionSource{"AUDITION SOURCE"}, auditionDraft{"AUDITION SLOT"}, stopAudition{"STOP AUDITION"};
     juce::TextButton swapUp{"MOVE UP"}, swapDown{"MOVE DOWN"};
-    juce::TextButton loadDraft{"OPEN BANK .BIN"}, saveDraft{"SAVE BANK .BIN"};
+    juce::TextButton loadDraft{"LOAD DESTINATION"}, newDraft{"NEW BANK"}, saveDraft{"SAVE BANK .BIN"};
     std::unique_ptr<juce::FileChooser> draftChooser;
     struct DraftListModel : juce::ListBoxModel {
         CX5MEditor& owner;
