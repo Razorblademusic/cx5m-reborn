@@ -20,6 +20,24 @@ CX5MEditor::CX5MEditor(CX5MProcessor& p) : AudioProcessorEditor(&p), processor(p
     }
     addAndMakeVisible(bank);
     bankAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(processor.state,"bank",bank);
+    setWantsKeyboardFocus(true);
+    addKeyListener(this);
+    bank.addKeyListener(this);
+    previousPatch.addKeyListener(this);
+    nextPatch.addKeyListener(this);
+    bendRange.addItemList({"±2", "±5", "±7", "±12"}, 1);
+    addAndMakeVisible(bendRange);
+    bendAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(processor.state, "bendRange", bendRange);
+    bendLabel.setText("BEND", juce::dontSendNotification);
+    bendLabel.setJustificationType(juce::Justification::centred);
+    addAndMakeVisible(bendLabel);
+    modDepth.setSliderStyle(juce::Slider::LinearHorizontal);
+    modDepth.setTextBoxStyle(juce::Slider::TextBoxRight, false, 45, 20);
+    addAndMakeVisible(modDepth);
+    modAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(processor.state, "modDepth", modDepth);
+    modLabel.setText("MOD DEPTH", juce::dontSendNotification);
+    modLabel.setJustificationType(juce::Justification::centred);
+    addAndMakeVisible(modLabel);
     addAndMakeVisible(previousPatch);
     addAndMakeVisible(nextPatch);
     previousPatch.onClick = [this] {
@@ -247,7 +265,7 @@ void CX5MEditor::paint(juce::Graphics& g) {
     g.setColour(juce::Colour(0xff80c8dc)); g.setFont(juce::Font(27.f, juce::Font::bold));
     g.drawText("CX5M  /  REBORN", 22, 12, 550, 42, juce::Justification::centredLeft);
     g.setColour(juce::Colours::lightgrey); g.setFont(13.f);
-    g.drawText("YM2151 CORE  |  48 RECOVERED CASSETTE VOICES (EXPERIMENTAL)  |  v0.5.2", 24, 54, 800, 24, juce::Justification::centredLeft);
+    g.drawText("YM2151 CORE  |  48 RECOVERED CASSETTE VOICES (EXPERIMENTAL)  |  v0.5.3", 24, 54, 800, 24, juce::Justification::centredLeft);
     if (!librarianVisible && !bankEditorVisible) for (int i = 0; i < 4; ++i) {
         auto r = juce::Rectangle<float>(20.f + i * 210.f, 105.f, 198.f, 250.f);
         g.setColour(juce::Colour(0xff263342)); g.fillRoundedRectangle(r, 8.f);
@@ -292,13 +310,17 @@ void CX5MEditor::resized() {
     controls[16].slider->setBounds(24, 390, 110, 90);
     controls[16].label->setBounds(24, 477, 110, 20);
     algorithm.setBounds(190, 412, 190, 32);
+    bendLabel.setBounds(143, 460, 48, 22);
+    bendRange.setBounds(190, 460, 65, 25);
+    modLabel.setBounds(258, 460, 82, 22);
+    modDepth.setBounds(338, 460, 138, 25);
     previousPatch.setBounds(402, 392, 38, 34);
     bank.setBounds(445, 392, 332, 34);
     nextPatch.setBounds(782, 392, 38, 34);
     bankStatus.setBounds(445, 426, 375, 22);
     cassette.setBounds(480, 450, 345, 36);
-    settings.setBounds(390, 450, 85, 36);
-    folderStatus.setBounds(395, 488, 430, 24);
+    settings.setBounds(390, 488, 85, 28);
+    folderStatus.setBounds(480, 488, 350, 24);
 }
 
 void CX5MEditor::refreshBankNames() {
@@ -428,6 +450,10 @@ void CX5MEditor::showTab(bool librarian) {
     for (auto& c : controls) { c.slider->setVisible(synthVisible); c.label->setVisible(synthVisible); }
     algorithm.setVisible(synthVisible);
     bank.setVisible(synthVisible);
+    bendRange.setVisible(synthVisible);
+    bendLabel.setVisible(synthVisible);
+    modDepth.setVisible(synthVisible);
+    modLabel.setVisible(synthVisible);
     previousPatch.setVisible(synthVisible);
     nextPatch.setVisible(synthVisible);
     bankStatus.setVisible(synthVisible);
@@ -579,4 +605,12 @@ void CX5MEditor::refreshSourceVoices() {
         sourceVoiceChoice.addItem(juce::String(i+1).paddedLeft('0',2) + "  " + voiceName(sourceBank.data()+i*64), i+1);
     sourceVoiceChoice.setSelectedId(juce::isPositiveAndBelow(oldSelection-1,48) ? oldSelection : 1,
                                     juce::dontSendNotification);
+}
+
+bool CX5MEditor::keyPressed(const juce::KeyPress& key, juce::Component*) {
+    // Arrow keys navigate the 48 synth patches only, not the bank editor.
+    if (librarianVisible || bankEditorVisible) return false;
+    if (key.getKeyCode() == juce::KeyPress::leftKey) { previousPatch.triggerClick(); return true; }
+    if (key.getKeyCode() == juce::KeyPress::rightKey) { nextPatch.triggerClick(); return true; }
+    return false;
 }

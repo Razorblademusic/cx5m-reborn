@@ -1,12 +1,13 @@
 #pragma once
 #include "PluginProcessor.h"
 #include <vector>
-class CX5MEditor final : public juce::AudioProcessorEditor {
+class CX5MEditor final : public juce::AudioProcessorEditor, private juce::KeyListener {
 public:
     explicit CX5MEditor(CX5MProcessor&);
     ~CX5MEditor() override;
     void resized() override;
     void paint(juce::Graphics&) override;
+    bool keyPressed(const juce::KeyPress&, juce::Component*) override;
 private:
     CX5MProcessor& processor;
     struct Control {
@@ -17,6 +18,12 @@ private:
     std::vector<Control> controls;
     juce::ComboBox algorithm;
     juce::ComboBox bank;
+    juce::ComboBox bendRange;
+    juce::Label bendLabel;
+    juce::Slider modDepth;
+    juce::Label modLabel;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> bendAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> modAttachment;
     juce::TextButton previousPatch{"<"}, nextPatch{">"};
     juce::Label bankStatus;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> bankAttachment;

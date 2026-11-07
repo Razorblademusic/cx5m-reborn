@@ -54,13 +54,15 @@ private:
     struct Voice { int note = -1; bool released = false; uint64_t age = 0; float velocity = 1.f; int releaseSamples = 0; };
     std::array<Voice, 8> voices{};
     uint64_t counter = 0;
-    int bend = 8192;
+    int bend = 8192, modulation = 0;
+    float lastModDepth = -1.f;
     double hostRate = 44100.0, nativeRate = 55930.0, fraction = 0.0;
     std::array<double, 2> prev{}, next{};
     std::array<int, 4> lastRatio{{-1,-1,-1,-1}}, lastLevel{{-1,-1,-1,-1}}, lastAttack{{-1,-1,-1,-1}}, lastRelease{{-1,-1,-1,-1}};
     int lastAlgorithm = -1;
     void write(uint8_t reg, uint8_t value);
     void setPitch(int channel, int note);
+    void updateModulation();
     void noteOn(int note, float velocity);
     void noteOff(int note);
     void updateParameters();

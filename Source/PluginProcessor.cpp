@@ -9,6 +9,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout CX5MProcessor::makeParams() 
     juce::AudioProcessorValueTreeState::ParameterLayout p;
     p.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"output",1}, "Output", juce::NormalisableRange<float>(0.f,1.f), .35f));
     p.add(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID{"algorithm",1}, "Algorithm", juce::StringArray{"Algorithm 1","Algorithm 2","Algorithm 3","Algorithm 4","Algorithm 5","Algorithm 6","Algorithm 7","Algorithm 8"}, 7));
+    p.add(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID{"bendRange",1}, "Pitch Bend Range", juce::StringArray{"2 semitones", "5 semitones", "7 semitones", "12 semitones"}, 0));
+    p.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"modDepth",1}, "Modulation Depth", juce::NormalisableRange<float>(0.f, 1.f), 0.5f));
     juce::StringArray bankNames;
     bankNames.add("Prototype (v0.3)");
     for (int i=0;i<48;++i) {
@@ -32,7 +34,7 @@ void CX5MProcessor::prepareToPlay(double sr,int) {
     hostRate=std::max(1.0,sr);
     chip.reset();
     nativeRate=static_cast<double>(chip.sample_rate(3579545));
-    fraction=0.0; prev={}; next={}; voices={}; counter=0; bend=8192;
+    fraction=0.0; prev={}; next={}; voices={}; counter=0; bend=8192; modulation=0; lastModDepth=-1;
     lastRatio.fill(-1); lastLevel.fill(-1); lastAttack.fill(-1); lastRelease.fill(-1); lastAlgorithm=-1;
     write(0x18,0); write(0x19,0); write(0x1b,0);
     for(int ch=0;ch<8;++ch) {
@@ -61,7 +63,9 @@ void CX5MProcessor::setPitch(int ch, int note)
     constexpr int code[12] =
         { 14, 0, 1, 2, 4, 5, 6, 8, 9, 10, 12, 13 };
 
-    double semis = (bend - 8192) / 8192.0 * 2.0;
+    constexpr double ranges[] = {2.0, 5.0, 7.0, 12.0};
+    const int rangeIndex = juce::jlimit(0, 3, static_cast<int>(state.getRawParameterValue("bendRange")->load()));
+    double semis = (bend - 8192) / 8192.0 * ranges[rangeIndex];
     double pitch = juce::jlimit(0.0, 95.0, note + semis);
 
     int whole = static_cast<int>(std::floor(pitch));
@@ -151,7 +155,10 @@ void CX5MProcessor::updateParameters() {
         activeBank = selected; lastBank = selected;
         if(selected>0) loadCassetteVoice(selected);
         else { lastAlgorithm=-1; lastRatio.fill(-1); lastLevel.fill(-1); lastAttack.fill(-1); lastRelease.fill(-1); }
+        updateModulation();
     }
+    const float depth = state.getRawParameterValue("modDepth")->load();
+    if (depth != lastModDepth) { lastModDepth = depth; updateModulation(); }
     if(activeBank>0) return;
 
     int alg=juce::jlimit(0,7,static_cast<int>(state.getRawParameterValue("algorithm")->load()));
@@ -175,6 +182,20 @@ void CX5MProcessor::updateParameters() {
         lastRatio[op]=ratio;lastLevel[op]=level;lastAttack[op]=ar;lastRelease[op]=rr;
     }
 }
+void CX5MProcessor::updateModulation() {
+    // YM2151 PMD and per-channel PMS control vibrato. Preserve the cassette
+    // voice's original settings at CC1=0; increase modulation with the wheel.
+    const int basePMD = activeBank > 0 ? (bankBytes()[static_cast<size_t>((activeBank - 1)*64 + 10)] & 0x7f) : 0;
+    const int basePMS = activeBank > 0 ? ((bankBytes()[static_cast<size_t>((activeBank - 1)*64 + 13)] >> 4) & 7) : 0;
+    const int baseAMS = activeBank > 0 ? (bankBytes()[static_cast<size_t>((activeBank - 1)*64 + 13)] & 3) : 0;
+    const double amount = (modulation / 127.0) * state.getRawParameterValue("modDepth")->load();
+    const int pmd = juce::jlimit(0, 127, basePMD + static_cast<int>(std::round((127 - basePMD) * amount)));
+    const int pms = juce::jlimit(0, 7, basePMS + static_cast<int>(std::round((7 - basePMS) * amount)));
+    if (activeBank == 0) write(0x18, static_cast<uint8_t>(amount > 0.0 ? 0x28 : 0));
+    write(0x19, static_cast<uint8_t>(0x80 | pmd));
+    for (int ch=0; ch<8; ++ch)
+        write(static_cast<uint8_t>(0x38 + ch), static_cast<uint8_t>((pms << 4) | baseAMS));
+}
 void CX5MProcessor::tick() {
     ymfm::ym2151::output_data out{};
     chip.generate(&out);
@@ -196,6 +217,7 @@ void CX5MProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::MidiBuff
             auto m=(*it).getMessage();
             if(m.isNoteOn()) noteOn(m.getNoteNumber(),m.getFloatVelocity());
             else if(m.isNoteOff()) noteOff(m.getNoteNumber());
+            else if(m.isController() && m.getControllerNumber()==1) { modulation=m.getControllerValue(); updateModulation(); }
             else if(m.isPitchWheel()) {bend=m.getPitchWheelValue();for(int ch=0;ch<8;++ch) if(voices[ch].note>=0) setPitch(ch,voices[ch].note);}
             else if(m.isAllSoundOff()||m.isAllNotesOff()) {for(int ch=0;ch<8;++ch) {write(0x08,static_cast<uint8_t>(ch));voices[ch]={};}}
             ++it;
