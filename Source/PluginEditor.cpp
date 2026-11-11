@@ -121,12 +121,15 @@ CX5MEditor::CX5MEditor(CX5MProcessor& p) : AudioProcessorEditor(&p), processor(p
     draftBank = cassetteBank::raw;
     sourceBank = cassetteBank::raw;
     addAndMakeVisible(sourceBankChoice);
-    addAndMakeVisible(sourceVoiceChoice);
     addAndMakeVisible(sourceList);
+    sourceList.setWantsKeyboardFocus(true);
+    sourceList.addKeyListener(this);
+    previousSource.addKeyListener(this);
+    nextSource.addKeyListener(this);
     addAndMakeVisible(previousSource);
     addAndMakeVisible(nextSource);
-    previousSource.onClick = [this] { const int id = sourceVoiceChoice.getSelectedId(); sourceVoiceChoice.setSelectedId(id <= 1 ? 48 : id - 1, juce::sendNotificationSync); };
-    nextSource.onClick = [this] { const int id = sourceVoiceChoice.getSelectedId(); sourceVoiceChoice.setSelectedId(id >= 48 ? 1 : id + 1, juce::sendNotificationSync); };
+    previousSource.onClick = [this] { stepSourceSelection(-1); };
+    nextSource.onClick = [this] { stepSourceSelection(1); };
     addAndMakeVisible(renameSlot);
     renameSlot.onClick = [this] {
         const int row = draftList.getSelectedRow();
@@ -325,7 +328,7 @@ void CX5MEditor::paint(juce::Graphics& g) {
     g.setColour(juce::Colour(0xff80c8dc)); g.setFont(juce::Font(27.f, juce::Font::bold));
     g.drawText("CX5M  /  REBORN", 22, 12, 550, 42, juce::Justification::centredLeft);
     g.setColour(juce::Colours::lightgrey); g.setFont(13.f);
-    g.drawText("YM2151 CORE  |  48 RECOVERED CASSETTE VOICES (EXPERIMENTAL)  |  v0.5.4", 24, 54, 800, 24, juce::Justification::centredLeft);
+    g.drawText("YM2151 CORE  |  48 RECOVERED CASSETTE VOICES (EXPERIMENTAL)  |  v0.5.4a", 24, 54, 800, 24, juce::Justification::centredLeft);
     if (!librarianVisible && !bankEditorVisible) for (int i = 0; i < 4; ++i) {
         auto r = juce::Rectangle<float>(20.f + i * 210.f, 105.f, 198.f, 250.f);
         g.setColour(juce::Colour(0xff263342)); g.fillRoundedRectangle(r, 8.f);
@@ -343,9 +346,8 @@ void CX5MEditor::resized() {
     sourceBankChoice.setBounds(25, 109, 370, 30);
     sourceList.setBounds(25, 144, 370, 250);
     draftList.setBounds(465, 109, 370, 285);
-    sourceVoiceChoice.setBounds(70, 399, 275, 24);
-    previousSource.setBounds(25, 399, 40, 24);
-    nextSource.setBounds(350, 399, 45, 24);
+    previousSource.setBounds(25, 399, 75, 24);
+    nextSource.setBounds(105, 399, 75, 24);
     auditionSource.setBounds(25, 429, 180, 28);
     stopAudition.setBounds(215, 429, 180, 28);
     copyVoice.setBounds(398, 218, 64, 64);
@@ -524,7 +526,7 @@ void CX5MEditor::showTab(bool librarian) {
     folderStatus.setVisible(synthVisible);
     const bool edit = bankEditorVisible;
     sourceBankChoice.setVisible(edit);
-    sourceVoiceChoice.setVisible(edit);
+    sourceVoiceChoice.setVisible(false);
     sourceList.setVisible(edit);
     previousSource.setVisible(edit);
     nextSource.setVisible(edit);
@@ -589,6 +591,7 @@ void CX5MEditor::SourceListModel::paintListBoxItem(int row, juce::Graphics& g, i
 void CX5MEditor::SourceListModel::selectedRowsChanged(int row) {
     if (owner.synchronisingSourceSelection || !juce::isPositiveAndBelow(row,48)) return;
     owner.sourceVoiceChoice.setSelectedId(row+1, juce::sendNotificationSync);
+    owner.sourceList.scrollToEnsureRowIsOnscreen(row);
 }
 
 void CX5MEditor::DraftListModel::paintListBoxItem(int row, juce::Graphics& g, int w, int h, bool selected) {
@@ -686,14 +689,39 @@ void CX5MEditor::refreshSourceVoices() {
     sourceList.updateContent();
     synchronisingSourceSelection = true;
     sourceList.selectRow(sourceVoiceChoice.getSelectedId()-1);
+    sourceList.scrollToEnsureRowIsOnscreen(sourceList.getSelectedRow());
     synchronisingSourceSelection = false;
     sourceList.repaint();
 }
 
-bool CX5MEditor::keyPressed(const juce::KeyPress& key, juce::Component*) {
-    // Arrow keys navigate the 48 synth patches only, not the bank editor.
-    if (librarianVisible || bankEditorVisible) return false;
-    if (key.getKeyCode() == juce::KeyPress::leftKey) { previousPatch.triggerClick(); return true; }
-    if (key.getKeyCode() == juce::KeyPress::rightKey) { nextPatch.triggerClick(); return true; }
+void CX5MEditor::stepSourceSelection(int delta) {
+    int row = sourceList.getSelectedRow();
+    if (!juce::isPositiveAndBelow(row, 48)) row = 0;
+    else row = (row + delta + 48) % 48;
+    sourceList.selectRow(row);
+    sourceList.scrollToEnsureRowIsOnscreen(row);
+    sourceList.grabKeyboardFocus();
+}
+
+bool CX5MEditor::keyPressed(const juce::KeyPress& key, juce::Component* originatingComponent) {
+    const auto code = key.getKeyCode();
+    if (bankEditorVisible) {
+        // Only capture arrows when the source list or its navigation buttons have focus.
+        // This keeps host/DAW shortcuts available elsewhere.
+        if (originatingComponent == &sourceList || (originatingComponent != nullptr && sourceList.isParentOf(originatingComponent))
+            || originatingComponent == &previousSource
+            || originatingComponent == &nextSource) {
+            if (code == juce::KeyPress::upKey || code == juce::KeyPress::leftKey) {
+                stepSourceSelection(-1); return true;
+            }
+            if (code == juce::KeyPress::downKey || code == juce::KeyPress::rightKey) {
+                stepSourceSelection(1); return true;
+            }
+        }
+        return false;
+    }
+    if (librarianVisible) return false;
+    if (code == juce::KeyPress::leftKey) { previousPatch.triggerClick(); return true; }
+    if (code == juce::KeyPress::rightKey) { nextPatch.triggerClick(); return true; }
     return false;
 }

@@ -109,6 +109,7 @@ private:
     void scanEditorSources();
     void loadEditorSource(int row);
     void refreshSourceVoices();
+    void stepSourceSelection(int delta);
     void refreshDraftList();
     static juce::String voiceName(const uint8_t* bytes);
     static bool readDecodedBank(const juce::File& file, std::array<uint8_t,3072>& dest, juce::String& error);
