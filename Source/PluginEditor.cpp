@@ -170,7 +170,7 @@ CX5MEditor::CX5MEditor(CX5MProcessor& p) : AudioProcessorEditor(&p), processor(p
     addAndMakeVisible(saveDraft);
     addAndMakeVisible(editorInstructions);
     addAndMakeVisible(editorStatus);
-    editorInstructions.setText("SOURCE BANK (48 VOICES)                              DESTINATION BANK (48 VOICES)", juce::dontSendNotification);
+    editorInstructions.setText("SOURCE BANK (48 VOICES)", juce::dontSendNotification);
     editorInstructions.setColour(juce::Label::textColourId, juce::Colour(0xff80c8dc));
     editorStatus.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
     editorStatus.setText("Select a source voice and a destination slot, then COPY.", juce::dontSendNotification);
@@ -328,7 +328,12 @@ void CX5MEditor::paint(juce::Graphics& g) {
     g.setColour(juce::Colour(0xff80c8dc)); g.setFont(juce::Font(27.f, juce::Font::bold));
     g.drawText("CX5M  /  REBORN", 22, 12, 550, 42, juce::Justification::centredLeft);
     g.setColour(juce::Colours::lightgrey); g.setFont(13.f);
-    g.drawText("YM2151 CORE  |  48 RECOVERED CASSETTE VOICES (EXPERIMENTAL)  |  v0.5.4a", 24, 54, 800, 24, juce::Justification::centredLeft);
+    g.drawText("YM2151 CORE  |  48 RECOVERED CASSETTE VOICES (EXPERIMENTAL)  |  v0.5.4b", 24, 54, 800, 24, juce::Justification::centredLeft);
+    if (bankEditorVisible) {
+        g.setColour(juce::Colour(0xff80c8dc));
+        g.setFont(15.f);
+        g.drawText("DESTINATION BANK (48 VOICES)", 465, 84, 370, 22, juce::Justification::centredLeft);
+    }
     if (!librarianVisible && !bankEditorVisible) for (int i = 0; i < 4; ++i) {
         auto r = juce::Rectangle<float>(20.f + i * 210.f, 105.f, 198.f, 250.f);
         g.setColour(juce::Colour(0xff263342)); g.fillRoundedRectangle(r, 8.f);
@@ -345,7 +350,7 @@ void CX5MEditor::resized() {
     editorInstructions.setBounds(25, 84, 810, 22);
     sourceBankChoice.setBounds(25, 109, 370, 30);
     sourceList.setBounds(25, 144, 370, 250);
-    draftList.setBounds(465, 109, 370, 285);
+    draftList.setBounds(465, 138, 370, 256);
     previousSource.setBounds(25, 399, 75, 24);
     nextSource.setBounds(105, 399, 75, 24);
     auditionSource.setBounds(25, 429, 180, 28);
@@ -358,7 +363,7 @@ void CX5MEditor::resized() {
     loadDraft.setBounds(465, 463, 165, 28);
     newDraft.setBounds(635, 463, 90, 28);
     saveDraft.setBounds(730, 463, 105, 28);
-    destinationBankLabel.setBounds(465, 78, 370, 26);
+    destinationBankLabel.setBounds(465, 108, 370, 26);
     editorStatus.setBounds(25, 492, 810, 24);
     bankList.setBounds(25, 115, 355, 315);
     voiceList.setBounds(400, 115, 435, 315);
