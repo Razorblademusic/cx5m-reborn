@@ -334,6 +334,7 @@ CX5MEditor::CX5MEditor(CX5MProcessor& p) : AudioProcessorEditor(&p), processor(p
         combo->setColour(juce::ComboBox::outlineColourId, edge);
         combo->setColour(juce::ComboBox::arrowColourId, teal);
     }
+    setLookAndFeel(&yamahaStyle);
     setSize(860, 520);
 }
 void CX5MEditor::addControl(const juce::String& id, const juce::String& name) {
@@ -373,7 +374,7 @@ void CX5MEditor::paint(juce::Graphics& g) {
     g.setColour(juce::Colour(0xffb6b8be));
     g.setFont(juce::Font(10.f));
     g.drawText("FM MUSIC COMPUTER  /  YM2151", 22, 55, 340, 17, juce::Justification::centredLeft);
-    g.drawText("v0.5.5  •  MSX HERITAGE EDITION", 22, 72, 360, 14, juce::Justification::centredLeft);
+    g.drawText("v0.5.6  |  MSX HARDWARE EDITION", 22, 72, 360, 14, juce::Justification::centredLeft);
 
     if (bankEditorVisible) {
         g.setColour(teal);
@@ -393,7 +394,7 @@ void CX5MEditor::paint(juce::Graphics& g) {
                        r.toNearestInt().removeFromTop(32), juce::Justification::centred);
         }
 }
-CX5MEditor::~CX5MEditor() { processor.stopVoicePreview(); }
+CX5MEditor::~CX5MEditor() { setLookAndFeel(nullptr); processor.stopVoicePreview(); }
 
 void CX5MEditor::resized() {
     synthTab.setBounds(465, 16, 110, 35);
