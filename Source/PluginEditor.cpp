@@ -310,12 +310,36 @@ CX5MEditor::CX5MEditor(CX5MProcessor& p) : AudioProcessorEditor(&p), processor(p
     // Do not scan the disk while the plugin editor is being constructed.
     // The user can scan on opening the Librarian tab or pressing Refresh.
     showTab(false);
+    // v0.5.5: Yamaha-inspired cosmetic palette; no DSP, MIDI or bank logic changes.
+    const auto teal = juce::Colour(0xff08bdb7);
+    const auto button = juce::Colour(0xff34343a);
+    const auto edge = juce::Colour(0xff65656b);
+    for (auto* b : { &synthTab, &librarianTab, &editorTab, &previousPatch,
+                     &nextPatch, &cassette, &settings, &rescanBanks,
+                     &previousSource, &nextSource, &copyVoice, &swapUp,
+                     &swapDown, &renameSlot, &loadDraft, &newDraft, &saveDraft,
+                     &stopAudition }) {
+        b->setColour(juce::TextButton::buttonColourId, button);
+        b->setColour(juce::TextButton::buttonOnColourId, teal);
+        b->setColour(juce::TextButton::textColourOffId, juce::Colours::white);
+    }
+    for (auto* list : { &bankList, &voiceList, &sourceList, &draftList }) {
+        list->setColour(juce::ListBox::backgroundColourId, juce::Colour(0xff1a2028));
+        list->setColour(juce::ListBox::outlineColourId, edge);
+        list->setOutlineThickness(1);
+    }
+    for (auto* combo : { &algorithm, &bank, &bendRange, &sourceBankChoice, &sourceVoiceChoice }) {
+        combo->setColour(juce::ComboBox::backgroundColourId, juce::Colour(0xff20242b));
+        combo->setColour(juce::ComboBox::textColourId, juce::Colours::white);
+        combo->setColour(juce::ComboBox::outlineColourId, edge);
+        combo->setColour(juce::ComboBox::arrowColourId, teal);
+    }
     setSize(860, 520);
 }
 void CX5MEditor::addControl(const juce::String& id, const juce::String& name) {
     Control c;
     c.slider = std::make_unique<juce::Slider>(juce::Slider::RotaryHorizontalVerticalDrag, juce::Slider::TextBoxBelow);
-    c.slider->setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xffe9ae5a));
+    c.slider->setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff08bdb7));
     c.label = std::make_unique<juce::Label>(); c.label->setText(name, juce::dontSendNotification);
     c.label->setJustificationType(juce::Justification::centred);
     c.label->setColour(juce::Label::textColourId, juce::Colours::lightgrey);
@@ -324,22 +348,50 @@ void CX5MEditor::addControl(const juce::String& id, const juce::String& name) {
     controls.push_back(std::move(c));
 }
 void CX5MEditor::paint(juce::Graphics& g) {
-    g.fillAll(juce::Colour(0xff171e28));
-    g.setColour(juce::Colour(0xff80c8dc)); g.setFont(juce::Font(27.f, juce::Font::bold));
-    g.drawText("CX5M  /  REBORN", 22, 12, 550, 42, juce::Justification::centredLeft);
-    g.setColour(juce::Colours::lightgrey); g.setFont(13.f);
-    g.drawText("YM2151 CORE  |  48 RECOVERED CASSETTE VOICES (EXPERIMENTAL)  |  v0.5.4b", 24, 54, 800, 24, juce::Justification::centredLeft);
+    // A restrained nod to the original CX5M enclosure: charcoal metal,
+    // ventilation slots and turquoise lettering. Existing layout is unchanged.
+    const auto teal = juce::Colour(0xff08bdb7);
+    const auto panel = juce::Colour(0xff34343a);
+    g.fillAll(juce::Colour(0xff27272d));
+    g.setGradientFill(juce::ColourGradient(juce::Colour(0xff4a4a50), 0.f, 0.f,
+                                          juce::Colour(0xff26262c), 0.f, 95.f, false));
+    g.fillRect(0, 0, getWidth(), 94);
+    g.setColour(juce::Colour(0xff111216));
+    for (int x = 20; x < 842; x += 12)
+        g.fillRoundedRectangle((float)x, 5.f, 6.f, 7.f, 2.f);
+    g.setColour(juce::Colour(0xff77777b));
+    g.drawHorizontalLine(94, 0.f, (float)getWidth());
+    g.setColour(juce::Colours::white);
+    g.setFont(juce::Font(17.f, juce::Font::bold));
+    g.drawText("YAMAHA", 22, 23, 92, 28, juce::Justification::centredLeft);
+    g.setColour(teal);
+    g.setFont(juce::Font(29.f, juce::Font::bold));
+    g.drawText("CX5M", 118, 16, 125, 38, juce::Justification::centredLeft);
+    g.setColour(juce::Colours::white);
+    g.setFont(juce::Font(17.f, juce::Font::italic));
+    g.drawText("REBORN", 245, 23, 105, 29, juce::Justification::centredLeft);
+    g.setColour(juce::Colour(0xffb6b8be));
+    g.setFont(juce::Font(10.f));
+    g.drawText("FM MUSIC COMPUTER  /  YM2151", 22, 55, 340, 17, juce::Justification::centredLeft);
+    g.drawText("v0.5.5  •  MSX HERITAGE EDITION", 22, 72, 360, 14, juce::Justification::centredLeft);
+
     if (bankEditorVisible) {
-        g.setColour(juce::Colour(0xff80c8dc));
+        g.setColour(teal);
         g.setFont(15.f);
         g.drawText("DESTINATION BANK (48 VOICES)", 465, 84, 370, 22, juce::Justification::centredLeft);
     }
-    if (!librarianVisible && !bankEditorVisible) for (int i = 0; i < 4; ++i) {
-        auto r = juce::Rectangle<float>(20.f + i * 210.f, 105.f, 198.f, 250.f);
-        g.setColour(juce::Colour(0xff263342)); g.fillRoundedRectangle(r, 8.f);
-        g.setColour(juce::Colour(0xff80c8dc)); g.setFont(17.f);
-        g.drawText("OPERATOR " + juce::String(i + 1), r.toNearestInt().removeFromTop(32), juce::Justification::centred);
-    }
+    if (!librarianVisible && !bankEditorVisible)
+        for (int i = 0; i < 4; ++i) {
+            auto r = juce::Rectangle<float>(20.f + i * 210.f, 105.f, 198.f, 250.f);
+            g.setColour(panel);
+            g.fillRoundedRectangle(r, 7.f);
+            g.setColour(juce::Colour(0xff66666c));
+            g.drawRoundedRectangle(r, 7.f, 1.f);
+            g.setColour(teal);
+            g.setFont(17.f);
+            g.drawText("OPERATOR " + juce::String(i + 1),
+                       r.toNearestInt().removeFromTop(32), juce::Justification::centred);
+        }
 }
 CX5MEditor::~CX5MEditor() { processor.stopVoicePreview(); }
 
