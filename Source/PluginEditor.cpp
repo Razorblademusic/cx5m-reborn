@@ -341,6 +341,10 @@ void CX5MEditor::addControl(const juce::String& id, const juce::String& name) {
     Control c;
     c.slider = std::make_unique<juce::Slider>(juce::Slider::RotaryHorizontalVerticalDrag, juce::Slider::TextBoxBelow);
     c.slider->setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff08bdb7));
+    c.slider->textFromValueFunction = [id](double value) {
+        const int decimals = id.startsWith("attack") || id.startsWith("release") ? 3 : 2;
+        return juce::String(value, decimals);
+    };
     c.label = std::make_unique<juce::Label>(); c.label->setText(name, juce::dontSendNotification);
     c.label->setJustificationType(juce::Justification::centred);
     c.label->setColour(juce::Label::textColourId, juce::Colours::lightgrey);
@@ -348,51 +352,118 @@ void CX5MEditor::addControl(const juce::String& id, const juce::String& name) {
     c.attachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(processor.state, id, *c.slider);
     controls.push_back(std::move(c));
 }
+namespace {
+// Vector lettering inspired by the angular, extended CX5M computer badge.
+// Drawn in JUCE so the plugin needs no external font or image resources.
+void drawCX5MBadge(juce::Graphics& g, juce::Rectangle<float> area) {
+    juce::Graphics::ScopedSaveState save(g);
+    g.addTransform(juce::AffineTransform::translation(area.getX(), area.getY())
+                       .scaled(area.getWidth() / 234.f, area.getHeight() / 46.f));
+    const auto turquoise = juce::Colour(0xff00d3c5);
+    const auto dark = juce::Colour(0xff076e71);
+    g.setColour(dark);
+    g.fillRoundedRectangle(0.f, 2.f, 234.f, 44.f, 3.f);
+    g.setColour(turquoise);
+    // The extended C and X are cut from angular MSX-era geometry.
+    juce::Path c;
+    c.startNewSubPath(49.f, 3.f); c.lineTo(17.f, 3.f); c.lineTo(0.f, 23.f);
+    c.lineTo(17.f, 43.f); c.lineTo(49.f, 43.f); c.lineTo(60.f, 31.f);
+    c.lineTo(24.f, 31.f); c.lineTo(17.f, 23.f); c.lineTo(24.f, 15.f);
+    c.lineTo(60.f, 15.f); c.closeSubPath(); g.fillPath(c);
+    juce::Path x;
+    x.startNewSubPath(59.f, 3.f); x.lineTo(82.f, 3.f); x.lineTo(100.f, 16.f);
+    x.lineTo(118.f, 3.f); x.lineTo(141.f, 3.f); x.lineTo(113.f, 23.f);
+    x.lineTo(141.f, 43.f); x.lineTo(118.f, 43.f); x.lineTo(100.f, 30.f);
+    x.lineTo(82.f, 43.f); x.lineTo(59.f, 43.f); x.lineTo(87.f, 23.f);
+    x.closeSubPath(); g.fillPath(x);
+    // Striped digital 5, characteristic of the original CX5M mark.
+    g.fillRect(146.f, 3.f, 43.f, 8.f);
+    g.fillRect(146.f, 3.f, 9.f, 22.f);
+    g.fillRect(146.f, 19.f, 42.f, 7.f);
+    g.fillRect(179.f, 19.f, 9.f, 24.f);
+    g.fillRect(146.f, 35.f, 42.f, 8.f);
+    g.setColour(juce::Colour(0xff101c20));
+    for (float y : { 5.f, 8.f, 21.f, 24.f, 37.f, 40.f })
+        g.drawLine(159.f, y, 176.f, y, 0.7f);
+    g.setColour(turquoise);
+    juce::Path m;
+    m.startNewSubPath(195.f,43.f);m.lineTo(195.f,3.f);m.lineTo(205.f,3.f);
+    m.lineTo(215.f,21.f);m.lineTo(225.f,3.f);m.lineTo(234.f,3.f);
+    m.lineTo(234.f,43.f);m.lineTo(225.f,43.f);m.lineTo(225.f,21.f);
+    m.lineTo(216.f,37.f);m.lineTo(212.f,37.f);m.lineTo(204.f,21.f);
+    m.lineTo(204.f,43.f);m.closeSubPath();g.fillPath(m);
+}
+void hardwarePanel(juce::Graphics& g, juce::Rectangle<float> r, float corner = 7.f) {
+    g.setColour(juce::Colour(0xff101116));
+    g.fillRoundedRectangle(r.translated(0.f, 2.f), corner);
+    g.setGradientFill(juce::ColourGradient(juce::Colour(0xff393a41), r.getX(),r.getY(),
+                                         juce::Colour(0xff292a31),r.getX(),r.getBottom(),false));
+    g.fillRoundedRectangle(r, corner);
+    g.setColour(juce::Colour(0xff84858b).withAlpha(0.7f));
+    g.drawRoundedRectangle(r.reduced(0.5f),corner,1.f);
+    g.setColour(juce::Colour(0xff121318));
+    g.drawLine(r.getX()+7.f,r.getBottom()-2.f,r.getRight()-7.f,r.getBottom()-2.f,1.f);
+}
+}
 void CX5MEditor::paint(juce::Graphics& g) {
-    // A restrained nod to the original CX5M enclosure: charcoal metal,
-    // ventilation slots and turquoise lettering. Existing layout is unchanged.
-    const auto teal = juce::Colour(0xff08bdb7);
-    const auto panel = juce::Colour(0xff34343a);
-    g.fillAll(juce::Colour(0xff27272d));
-    g.setGradientFill(juce::ColourGradient(juce::Colour(0xff4a4a50), 0.f, 0.f,
-                                          juce::Colour(0xff26262c), 0.f, 95.f, false));
-    g.fillRect(0, 0, getWidth(), 94);
-    g.setColour(juce::Colour(0xff111216));
-    for (int x = 20; x < 842; x += 12)
-        g.fillRoundedRectangle((float)x, 5.f, 6.f, 7.f, 2.f);
-    g.setColour(juce::Colour(0xff77777b));
-    g.drawHorizontalLine(94, 0.f, (float)getWidth());
-    g.setColour(juce::Colours::white);
-    g.setFont(juce::Font(17.f, juce::Font::bold));
-    g.drawText("YAMAHA", 22, 23, 92, 28, juce::Justification::centredLeft);
-    g.setColour(teal);
-    g.setFont(juce::Font(29.f, juce::Font::bold));
-    g.drawText("CX5M", 118, 16, 125, 38, juce::Justification::centredLeft);
-    g.setColour(juce::Colours::white);
-    g.setFont(juce::Font(17.f, juce::Font::italic));
-    g.drawText("REBORN", 245, 23, 105, 29, juce::Justification::centredLeft);
-    g.setColour(juce::Colour(0xffb6b8be));
-    g.setFont(juce::Font(10.f));
-    g.drawText("FM MUSIC COMPUTER  /  YM2151", 22, 55, 340, 17, juce::Justification::centredLeft);
-    g.drawText("v0.5.6  |  MSX HARDWARE EDITION", 22, 72, 360, 14, juce::Justification::centredLeft);
-
-    if (bankEditorVisible) {
-        g.setColour(teal);
-        g.setFont(15.f);
-        g.drawText("DESTINATION BANK (48 VOICES)", 465, 84, 370, 22, juce::Justification::centredLeft);
+    const auto teal=juce::Colour(0xff00d3c5);
+    const auto w=(float)getWidth();
+    g.setGradientFill(juce::ColourGradient(juce::Colour(0xff34343b),0.f,0.f,
+                                          juce::Colour(0xff232329),w,(float)getHeight(),false));
+    g.fillAll();
+    // Extruded, rounded MSX computer chassis and full-length vent grille.
+    g.setColour(juce::Colour(0xff101115));
+    g.fillRoundedRectangle(1.f,1.f,w-2.f,102.f,9.f);
+    g.setGradientFill(juce::ColourGradient(juce::Colour(0xff55565d),0.f,3.f,
+                                          juce::Colour(0xff28292f),0.f,96.f,false));
+    g.fillRoundedRectangle(3.f,3.f,w-6.f,95.f,8.f);
+    g.setColour(juce::Colour(0xff82838b));
+    g.drawRoundedRectangle(3.5f,3.5f,w-7.f,94.f,8.f,1.f);
+    for(int x=19;x<getWidth()-16;x+=12) {
+        g.setColour(juce::Colour(0xff0b0c10));
+        g.fillRoundedRectangle((float)x,9.f,5.f,10.f,2.f);
+        g.setColour(juce::Colour(0xff777981).withAlpha(0.34f));
+        g.drawLine((float)x,9.f,(float)x+5.f,9.f,0.6f);
     }
-    if (!librarianVisible && !bankEditorVisible)
-        for (int i = 0; i < 4; ++i) {
-            auto r = juce::Rectangle<float>(20.f + i * 210.f, 105.f, 198.f, 250.f);
-            g.setColour(panel);
-            g.fillRoundedRectangle(r, 7.f);
-            g.setColour(juce::Colour(0xff66666c));
-            g.drawRoundedRectangle(r, 7.f, 1.f);
+    g.setColour(juce::Colours::white);
+    g.setFont(juce::Font(16.f,juce::Font::bold));
+    g.drawText("YAMAHA",22,35,88,25,juce::Justification::centredLeft);
+    drawCX5MBadge(g,{114.f,31.f,159.f,32.f});
+    g.setColour(juce::Colour(0xffe5e5e8));
+    g.setFont(juce::Font(17.f,juce::Font::italic));
+    g.drawText("REBORN",280,35,100,25,juce::Justification::centredLeft);
+    g.setColour(juce::Colour(0xffb9bac1));
+    g.setFont(juce::Font(10.f));
+    g.drawText("FM MUSIC COMPUTER / YM2151",23,66,270,13,juce::Justification::centredLeft);
+    g.drawText("v0.5.7  •  MSX HARDWARE EDITION",23,80,310,12,juce::Justification::centredLeft);
+    // Embossed MSX emblem in the right corner, below the tabs' top edge.
+    g.setColour(juce::Colour(0xff8e929a));
+    g.drawHorizontalLine(100,5.f,w-5.f);
+    if (!librarianVisible && !bankEditorVisible) {
+        for(int i=0;i<4;++i) {
+            auto r=juce::Rectangle<float>(20.f+i*210.f,105.f,198.f,250.f);
+            hardwarePanel(g,r);
+            g.setColour(juce::Colour(0xff171a20));
+            g.fillRoundedRectangle(r.getX()+12.f,r.getY()+9.f,r.getWidth()-24.f,28.f,3.f);
             g.setColour(teal);
-            g.setFont(17.f);
-            g.drawText("OPERATOR " + juce::String(i + 1),
-                       r.toNearestInt().removeFromTop(32), juce::Justification::centred);
+            g.setFont(juce::Font(15.f,juce::Font::bold));
+            g.drawText("OPERATOR "+juce::String(i+1),r.toNearestInt().removeFromTop(43),juce::Justification::centred);
         }
+        hardwarePanel(g,{20.f,373.f,365.f,143.f});
+        hardwarePanel(g,{393.f,373.f,447.f,143.f});
+        g.setColour(teal);
+        g.setFont(juce::Font(11.f,juce::Font::bold));
+        g.drawText("GLOBAL / CONTROLLERS",140,380,220,18,juce::Justification::centredLeft);
+        g.drawText("VOICE / BANK",400,375,185,16,juce::Justification::centredLeft);
+    } else if (bankEditorVisible) {
+        hardwarePanel(g,{18.f,104.f,383.f,410.f});
+        hardwarePanel(g,{458.f,104.f,386.f,410.f});
+        g.setColour(teal);g.setFont(juce::Font(13.f,juce::Font::bold));
+        g.drawText("DESTINATION BANK (48 VOICES)",465,84,365,20,juce::Justification::centredLeft);
+    } else {
+        hardwarePanel(g,{18.f,104.f,371.f,398.f});
+        hardwarePanel(g,{392.f,104.f,452.f,398.f});
+    }
 }
 CX5MEditor::~CX5MEditor() { setLookAndFeel(nullptr); processor.stopVoicePreview(); }
 
