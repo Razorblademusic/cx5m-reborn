@@ -16,14 +16,14 @@ public:
  void drawRotarySlider(juce::Graphics& g, int x, int y, int w, int h, float pos,
                        float start, float end, juce::Slider& slider) override {
    const auto teal=juce::Colour(0xff0fd1c4);
-   const float size=juce::jmin((float)w,(float)h)*0.72f;
+   const float size=juce::jmin((float)w,(float)h)*0.67f;
    const float cx=x+w*0.5f, cy=y+h*0.5f;
    const float r=size*0.5f, angle=start+pos*(end-start);
    juce::Path track, active;
    track.addCentredArc(cx,cy,r+4,r+4,0,start,end,true);
    active.addCentredArc(cx,cy,r+4,r+4,0,start,angle,true);
-   g.setColour(juce::Colour(0xff111b20));g.strokePath(track,juce::PathStrokeType(5.f,juce::PathStrokeType::curved,juce::PathStrokeType::rounded));
-   g.setColour(teal);g.strokePath(active,juce::PathStrokeType(4.f,juce::PathStrokeType::curved,juce::PathStrokeType::rounded));
+   g.setColour(juce::Colour(0xff090e13));g.strokePath(track,juce::PathStrokeType(5.f,juce::PathStrokeType::curved,juce::PathStrokeType::rounded));
+   g.setColour(teal.withAlpha(0.90f));g.strokePath(active,juce::PathStrokeType(4.f,juce::PathStrokeType::curved,juce::PathStrokeType::rounded));
    auto knob=juce::Rectangle<float>(cx-r,cy-r,size,size);
    g.setGradientFill(juce::ColourGradient(juce::Colour(0xff777b81),cx-r,cy-r,juce::Colour(0xff111216),cx+r,cy+r,false));
    g.fillEllipse(knob);
@@ -31,6 +31,10 @@ public:
    auto inner=knob.reduced(4.f);
    g.setGradientFill(juce::ColourGradient(juce::Colour(0xff46494f),cx-r,cy-r,juce::Colour(0xff17191d),cx+r,cy+r,false));
    g.fillEllipse(inner);
+   g.setColour(juce::Colours::white.withAlpha(0.13f));
+   g.drawEllipse(inner.reduced(1.f),0.9f);
+   g.setColour(juce::Colour(0xff090b0e).withAlpha(0.65f));
+   g.drawEllipse(inner.reduced(2.f),0.7f);
    const auto a=angle-juce::MathConstants<float>::halfPi;
    g.setColour(teal.brighter(0.3f));
    g.drawLine(cx+std::cos(a)*r*0.25f,cy+std::sin(a)*r*0.25f,
@@ -43,7 +47,9 @@ public:
    auto bottom=down?juce::Colour(0xff34373d):juce::Colour(0xff24262b);
    if(bg.getSaturation()>0.3f && bg.getBrightness()>0.32f){top=bg.brighter(0.12f);bottom=bg.darker(0.28f);}
    g.setGradientFill(juce::ColourGradient(top,r.getX(),r.getY(),bottom,r.getX(),r.getBottom(),false));
-   g.fillRoundedRectangle(r,4.f);
+   g.fillRoundedRectangle(r.translated(0.f,1.2f),4.f);
+   g.setColour(juce::Colours::white.withAlpha(down?0.06f:0.16f));
+   g.drawLine(r.getX()+5.f,r.getY()+1.5f,r.getRight()-5.f,r.getY()+1.5f,1.f);
    g.setColour(juce::Colour(0xff92959a).withAlpha(0.75f));g.drawRoundedRectangle(r,4.f,1.f);
    g.setColour(juce::Colour(0xff101215));g.drawLine(r.getX()+4,r.getBottom()-2,r.getRight()-4,r.getBottom()-2,1.f);
  }

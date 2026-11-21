@@ -339,7 +339,7 @@ CX5MEditor::CX5MEditor(CX5MProcessor& p) : AudioProcessorEditor(&p), processor(p
         combo->setColour(juce::ComboBox::arrowColourId, teal);
     }
     setLookAndFeel(&yamahaStyle);
-    setSize(860, 520);
+    setSize(1060, 680);
 }
 void CX5MEditor::addControl(const juce::String& id, const juce::String& name) {
     Control c;
@@ -366,8 +366,8 @@ void drawCX5MBadge(juce::Graphics& g, juce::Rectangle<float> area) {
                        .scaled(area.getWidth() / 234.f, area.getHeight() / 46.f));
     const auto turquoise = juce::Colour(0xff00d3c5);
     const auto dark = juce::Colour(0xff076e71);
-    g.setColour(dark);
-    g.fillRoundedRectangle(0.f, 2.f, 234.f, 44.f, 3.f);
+    g.setColour(dark.withAlpha(0.32f));
+    g.fillRoundedRectangle(0.f, 2.f, 234.f, 44.f, 2.f);
     g.setColour(turquoise);
     // The extended C and X are cut from angular MSX-era geometry.
     juce::Path c;
@@ -411,114 +411,150 @@ void hardwarePanel(juce::Graphics& g, juce::Rectangle<float> r, float corner = 7
 }
 }
 void CX5MEditor::paint(juce::Graphics& g) {
-    const auto teal=juce::Colour(0xff00d3c5);
-    const auto w=(float)getWidth();
-    g.setGradientFill(juce::ColourGradient(juce::Colour(0xff34343b),0.f,0.f,
-                                          juce::Colour(0xff232329),w,(float)getHeight(),false));
+    const auto teal = juce::Colour(0xff16d9cf);
+    const float w = (float) getWidth(), h = (float) getHeight();
+    // Brushed graphite enclosure: fine machining lines and edge lighting.
+    g.setGradientFill(juce::ColourGradient(juce::Colour(0xff42434a), 0.f, 0.f,
+                                          juce::Colour(0xff18191f), w, h, false));
     g.fillAll();
-    // Extruded, rounded MSX computer chassis and full-length vent grille.
-    g.setColour(juce::Colour(0xff101115));
-    g.fillRoundedRectangle(1.f,1.f,w-2.f,102.f,9.f);
-    g.setGradientFill(juce::ColourGradient(juce::Colour(0xff55565d),0.f,3.f,
-                                          juce::Colour(0xff28292f),0.f,96.f,false));
-    g.fillRoundedRectangle(3.f,3.f,w-6.f,95.f,8.f);
-    g.setColour(juce::Colour(0xff82838b));
-    g.drawRoundedRectangle(3.5f,3.5f,w-7.f,94.f,8.f,1.f);
-    for(int x=19;x<getWidth()-16;x+=12) {
-        g.setColour(juce::Colour(0xff0b0c10));
-        g.fillRoundedRectangle((float)x,9.f,5.f,10.f,2.f);
-        g.setColour(juce::Colour(0xff777981).withAlpha(0.34f));
-        g.drawLine((float)x,9.f,(float)x+5.f,9.f,0.6f);
+    for (int y = 0; y < getHeight(); y += 3) {
+        g.setColour(juce::Colours::white.withAlpha((y % 9 == 0) ? 0.016f : 0.008f));
+        g.drawHorizontalLine(y, 0.f, w);
     }
-    g.setColour(juce::Colours::white);
-    g.setFont(juce::Font(16.f,juce::Font::bold));
-    g.drawText("YAMAHA",22,35,88,25,juce::Justification::centredLeft);
-    drawCX5MBadge(g,{114.f,31.f,159.f,32.f});
-    g.setColour(juce::Colour(0xffe5e5e8));
-    g.setFont(juce::Font(17.f,juce::Font::italic));
-    g.drawText("REBORN",280,35,100,25,juce::Justification::centredLeft);
-    g.setColour(juce::Colour(0xffb9bac1));
-    g.setFont(juce::Font(10.f));
-    g.drawText("FM MUSIC COMPUTER / YM2151",23,66,270,13,juce::Justification::centredLeft);
-    g.drawText("v0.5.8  |  MSX HARDWARE EDITION",23,80,310,12,juce::Justification::centredLeft);
-    // Embossed MSX emblem in the right corner, below the tabs' top edge.
-    g.setColour(juce::Colour(0xff8e929a));
-    g.drawHorizontalLine(100,5.f,w-5.f);
+    g.setColour(juce::Colour(0xff0b0d10));
+    g.fillRoundedRectangle(2.f, 2.f, w-4.f, 112.f, 10.f);
+    g.setGradientFill(juce::ColourGradient(juce::Colour(0xff63646b), 4.f, 4.f,
+                                          juce::Colour(0xff292a30), 4.f, 106.f, false));
+    g.fillRoundedRectangle(4.f, 4.f, w-8.f, 103.f, 9.f);
+    g.setColour(juce::Colour(0xffa0a1a7).withAlpha(0.5f));
+    g.drawRoundedRectangle(4.5f, 4.5f, w-9.f, 102.f, 9.f, 1.f);
+    // Deep ventilation apertures with a highlight on the near edge.
+    for (int x = 24; x < getWidth()-22; x += 13) {
+        g.setColour(juce::Colour(0xff090a0e));
+        g.fillRoundedRectangle((float)x, 11.f, 6.f, 17.f, 2.3f);
+        g.setColour(juce::Colour(0xff98999e).withAlpha(0.32f));
+        g.drawLine((float)x+1.f, 10.5f, (float)x+6.f, 10.5f, 0.7f);
+    }
+    g.setColour(juce::Colour(0xfff0f0ef));
+    g.setFont(juce::Font(18.f, juce::Font::bold));
+    g.drawText("YAMAHA", 26, 47, 91, 27, juce::Justification::centredLeft);
+    drawCX5MBadge(g, {126.f, 42.f, 204.f, 43.f});
+    g.setColour(juce::Colour(0xffe6e6e9));
+    g.setFont(juce::Font(18.f, juce::Font::italic));
+    g.drawText("REBORN", 340, 51, 110, 24, juce::Justification::centredLeft);
+    g.setColour(juce::Colour(0xffb8bac2));
+    g.setFont(juce::Font(10.5f));
+    g.drawText("FM MUSIC COMPUTER  /  YM2151", 27, 85, 310, 14, juce::Justification::centredLeft);
+    g.drawText("v0.6.0  |  HARDWARE EDITION", 347, 85, 210, 14, juce::Justification::centredLeft);
+    // Small embossed MSX emblem, deliberately separated from the navigation.
+    g.setColour(juce::Colour(0xff13151b));
+    g.fillRoundedRectangle(w-78.f, 77.f, 57.f, 22.f, 2.f);
+    g.setColour(juce::Colour(0xffaeb0b5));
+    g.drawRoundedRectangle(w-77.5f, 77.5f, 56.f, 21.f, 2.f, 0.8f);
+    g.setFont(juce::Font(15.f, juce::Font::bold | juce::Font::italic));
+    g.drawText("MSX", (int)w-74, 77, 50, 22, juce::Justification::centred);
+    // Machined faceplate and inset mounting screws.
+    g.setColour(juce::Colour(0xff111217));
+    g.drawHorizontalLine(111, 6.f, w-6.f);
+    auto screw = [&g](float x, float y) {
+        g.setColour(juce::Colour(0xff111217)); g.fillEllipse(x-4.f,y-4.f,8.f,8.f);
+        g.setColour(juce::Colour(0xff878991)); g.drawEllipse(x-3.5f,y-3.5f,7.f,7.f,0.8f);
+        g.setColour(juce::Colour(0xff1b1c21)); g.drawLine(x-2.f,y+1.f,x+2.f,y-1.f,1.f);
+    };
+    screw(13.f, 122.f); screw(w-13.f, 122.f);
+    screw(13.f, h-12.f); screw(w-13.f, h-12.f);
     if (!librarianVisible && !bankEditorVisible) {
-        for(int i=0;i<4;++i) {
-            auto r=juce::Rectangle<float>(20.f+i*210.f,105.f,198.f,250.f);
-            hardwarePanel(g,r);
-            g.setColour(juce::Colour(0xff171a20));
-            g.fillRoundedRectangle(r.getX()+12.f,r.getY()+9.f,r.getWidth()-24.f,28.f,3.f);
+        // Upper synth control deck: individually machined operator modules.
+        for (int i = 0; i < 4; ++i) {
+            const float x = 22.f + (float)i * 258.f;
+            auto r = juce::Rectangle<float>(x, 136.f, 246.f, 326.f);
+            hardwarePanel(g, r, 8.f);
+            g.setColour(juce::Colour(0xff11151b));
+            g.fillRoundedRectangle(x+12.f, 147.f, 222.f, 32.f, 4.f);
+            g.setColour(juce::Colour(0xff747881));
+            g.drawRoundedRectangle(x+12.5f,147.5f,221.f,31.f,4.f,0.6f);
             g.setColour(teal);
-            g.setFont(juce::Font(15.f,juce::Font::bold));
-            g.drawText("OPERATOR "+juce::String(i+1),r.toNearestInt().removeFromTop(43),juce::Justification::centred);
+            g.setFont(juce::Font(14.f, juce::Font::bold));
+            g.drawText("OPERATOR " + juce::String(i+1), (int)x+16, 149, 214, 27, juce::Justification::centred);
+            g.setColour(juce::Colour(0xff8e9199).withAlpha(0.35f));
+            g.drawHorizontalLine(313, x+13.f, x+233.f);
         }
-        hardwarePanel(g,{20.f,373.f,365.f,143.f});
-        hardwarePanel(g,{393.f,373.f,447.f,143.f});
-        g.setColour(teal);
-        g.setFont(juce::Font(11.f,juce::Font::bold));
-        g.drawText("GLOBAL / CONTROLLERS",140,380,220,18,juce::Justification::centredLeft);
-        g.drawText("VOICE / BANK",400,375,185,16,juce::Justification::centredLeft);
+        hardwarePanel(g, {22.f, 474.f, 470.f, 185.f});
+        hardwarePanel(g, {503.f, 474.f, 535.f, 185.f});
+        g.setColour(teal); g.setFont(juce::Font(12.f, juce::Font::bold));
+        g.drawText("GLOBAL  /  CONTROLLERS", 36, 484, 300, 20, juce::Justification::centredLeft);
+        g.drawText("VOICE  /  BANK", 517, 484, 270, 20, juce::Justification::centredLeft);
+        g.setColour(juce::Colour(0xff11151b));
+        g.fillRoundedRectangle(177.f, 531.f, 250.f, 47.f, 4.f);
+        g.setColour(juce::Colour(0xff606a72));
+        g.drawRoundedRectangle(177.5f,531.5f,249.f,46.f,4.f,0.7f);
     } else if (bankEditorVisible) {
-        hardwarePanel(g,{18.f,104.f,383.f,410.f});
-        hardwarePanel(g,{458.f,104.f,386.f,410.f});
-        g.setColour(teal);g.setFont(juce::Font(13.f,juce::Font::bold));
-        g.drawText("DESTINATION BANK (48 VOICES)",468,110,365,20,juce::Justification::centredLeft);
+        hardwarePanel(g, {22.f, 136.f, 473.f, 520.f});
+        hardwarePanel(g, {563.f, 136.f, 475.f, 520.f});
+        g.setColour(teal); g.setFont(juce::Font(14.f, juce::Font::bold));
+        g.drawText("DESTINATION BANK  /  48 VOICES", 580, 146, 442, 23, juce::Justification::centredLeft);
+        g.setColour(juce::Colour(0xff11151b));
+        g.fillRoundedRectangle(502.f, 323.f, 54.f, 66.f, 5.f);
     } else {
-        hardwarePanel(g,{18.f,104.f,371.f,398.f});
-        hardwarePanel(g,{392.f,104.f,452.f,398.f});
+        hardwarePanel(g, {22.f, 136.f, 486.f, 520.f});
+        hardwarePanel(g, {520.f, 136.f, 518.f, 520.f});
+        g.setColour(teal); g.setFont(juce::Font(14.f, juce::Font::bold));
+        g.drawText("AVAILABLE BANKS", 40, 147, 450, 23, juce::Justification::centredLeft);
+        g.drawText("VOICES  /  48 SLOTS", 538, 147, 475, 23, juce::Justification::centredLeft);
     }
 }
 CX5MEditor::~CX5MEditor() { setLookAndFeel(nullptr); processor.stopVoicePreview(); }
 
 void CX5MEditor::resized() {
-    synthTab.setBounds(465, 16, 110, 35);
-    librarianTab.setBounds(585, 16, 115, 35);
-    editorTab.setBounds(710, 16, 130, 35);
-    editorInstructions.setBounds(28, 109, 360, 22);
-    sourceBankChoice.setBounds(28, 134, 365, 28);
-    sourceList.setBounds(28, 168, 365, 226);
-    draftList.setBounds(468, 168, 365, 226);
-    previousSource.setBounds(25, 399, 75, 24);
-    nextSource.setBounds(105, 399, 75, 24);
-    auditionSource.setBounds(25, 429, 180, 28);
-    stopAudition.setBounds(215, 429, 180, 28);
-    copyVoice.setBounds(400, 232, 58, 54);
-    swapUp.setBounds(465, 399, 90, 27);
-    swapDown.setBounds(560, 399, 105, 27);
-    renameSlot.setBounds(675, 399, 160, 27);
-    auditionDraft.setBounds(465, 429, 170, 28);
-    loadDraft.setBounds(465, 463, 165, 28);
-    newDraft.setBounds(635, 463, 90, 28);
-    saveDraft.setBounds(730, 463, 105, 28);
-    destinationBankLabel.setBounds(468, 134, 365, 26);
-    editorStatus.setBounds(28, 492, 805, 22);
-    bankList.setBounds(25, 115, 355, 315);
-    voiceList.setBounds(400, 115, 435, 315);
-    rescanBanks.setBounds(25, 448, 190, 35);
-    librarianInfo.setBounds(230, 448, 610, 35);
+    synthTab.setBounds(607, 40, 125, 34);
+    librarianTab.setBounds(738, 40, 135, 34);
+    editorTab.setBounds(879, 40, 155, 34);
+    // Bank editor: two balanced wells, central transfer control, footer actions.
+    editorInstructions.setBounds(39, 145, 443, 25);
+    sourceBankChoice.setBounds(39, 177, 443, 31);
+    sourceList.setBounds(39, 216, 443, 292);
+    destinationBankLabel.setBounds(580, 177, 440, 31);
+    draftList.setBounds(580, 216, 440, 292);
+    copyVoice.setBounds(501, 335, 56, 40);
+    previousSource.setBounds(39, 518, 86, 29);
+    nextSource.setBounds(132, 518, 86, 29);
+    auditionSource.setBounds(39, 559, 196, 33);
+    stopAudition.setBounds(246, 559, 236, 33);
+    swapUp.setBounds(580, 518, 111, 29);
+    swapDown.setBounds(699, 518, 126, 29);
+    renameSlot.setBounds(835, 518, 185, 29);
+    auditionDraft.setBounds(580, 559, 190, 33);
+    loadDraft.setBounds(580, 602, 188, 34);
+    newDraft.setBounds(779, 602, 106, 34);
+    saveDraft.setBounds(895, 602, 125, 34);
+    editorStatus.setBounds(39, 611, 435, 30);
+    // Librarian: generous list space and no clipped actions.
+    bankList.setBounds(39, 180, 451, 388);
+    voiceList.setBounds(538, 180, 480, 388);
+    rescanBanks.setBounds(39, 586, 200, 38);
+    librarianInfo.setBounds(253, 586, 765, 38);
+    // Four operator modules, two controls per row.
     for (int i = 0; i < 16; ++i) {
-        int op = i / 4, n = i % 4;
-        int x = 27 + op * 210 + (n % 2) * 94;
-        int y = 145 + (n / 2) * 105;
-        controls[i].slider->setBounds(x, y, 84, 75);
-        controls[i].label->setBounds(x, y + 74, 84, 20);
+        const int op = i / 4, n = i % 4;
+        const int x = 40 + op * 258 + (n % 2) * 114;
+        const int y = 190 + (n / 2) * 132;
+        controls[i].slider->setBounds(x, y, 99, 91);
+        controls[i].label->setBounds(x, y + 89, 99, 23);
     }
-    controls[16].slider->setBounds(24, 390, 110, 90);
-    controls[16].label->setBounds(24, 477, 110, 20);
-    algorithm.setBounds(190, 412, 190, 32);
-    bendLabel.setBounds(143, 460, 48, 22);
-    bendRange.setBounds(190, 460, 65, 25);
-    modLabel.setBounds(258, 460, 82, 22);
-    modDepth.setBounds(338, 460, 138, 25);
-    previousPatch.setBounds(402, 392, 38, 34);
-    bank.setBounds(445, 392, 332, 34);
-    nextPatch.setBounds(782, 392, 38, 34);
-    bankStatus.setBounds(445, 426, 375, 22);
-    cassette.setBounds(480, 450, 345, 36);
-    settings.setBounds(390, 488, 85, 28);
-    folderStatus.setBounds(480, 488, 350, 24);
+    controls[16].slider->setBounds(41, 510, 124, 108);
+    controls[16].label->setBounds(41, 613, 124, 22);
+    algorithm.setBounds(183, 541, 237, 33);
+    bendLabel.setBounds(180, 589, 52, 23);
+    bendRange.setBounds(234, 589, 72, 26);
+    modLabel.setBounds(311, 589, 89, 23);
+    modDepth.setBounds(399, 589, 98, 26);
+    previousPatch.setBounds(520, 517, 45, 37);
+    bank.setBounds(573, 517, 397, 37);
+    nextPatch.setBounds(978, 517, 45, 37);
+    bankStatus.setBounds(573, 558, 447, 22);
+    cassette.setBounds(650, 586, 370, 35);
+    settings.setBounds(517, 626, 110, 29);
+    folderStatus.setBounds(640, 627, 378, 27);
 }
 
 void CX5MEditor::refreshBankNames() {
