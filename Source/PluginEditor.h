@@ -1,5 +1,6 @@
 #pragma once
 #include "PluginProcessor.h"
+#include "YamahaLookAndFeel.h"
 #include <vector>
 class CX5MEditor final : public juce::AudioProcessorEditor, private juce::KeyListener {
 public:
@@ -9,6 +10,7 @@ public:
     void paint(juce::Graphics&) override;
     bool keyPressed(const juce::KeyPress&, juce::Component*) override;
 private:
+    YamahaLookAndFeel yamahaStyle;
     CX5MProcessor& processor;
     struct Control {
         std::unique_ptr<juce::Slider> slider;
