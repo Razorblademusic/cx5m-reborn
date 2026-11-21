@@ -25,7 +25,10 @@ CX5MEditor::CX5MEditor(CX5MProcessor& p) : AudioProcessorEditor(&p), processor(p
     bank.addKeyListener(this);
     previousPatch.addKeyListener(this);
     nextPatch.addKeyListener(this);
-    bendRange.addItemList({"±2", "±5", "±7", "±12"}, 1);
+    bendRange.addItemList({juce::String::fromUTF8("\xC2\xB1") + "2",
+                           juce::String::fromUTF8("\xC2\xB1") + "5",
+                           juce::String::fromUTF8("\xC2\xB1") + "7",
+                           juce::String::fromUTF8("\xC2\xB1") + "12"}, 1);
     addAndMakeVisible(bendRange);
     bendAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(processor.state, "bendRange", bendRange);
     bendLabel.setText("BEND", juce::dontSendNotification);
@@ -33,6 +36,7 @@ CX5MEditor::CX5MEditor(CX5MProcessor& p) : AudioProcessorEditor(&p), processor(p
     addAndMakeVisible(bendLabel);
     modDepth.setSliderStyle(juce::Slider::LinearHorizontal);
     modDepth.setTextBoxStyle(juce::Slider::TextBoxRight, false, 45, 20);
+    modDepth.setNumDecimalPlacesToDisplay(2);
     addAndMakeVisible(modDepth);
     modAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(processor.state, "modDepth", modDepth);
     modLabel.setText("MOD DEPTH", juce::dontSendNotification);
@@ -341,6 +345,7 @@ void CX5MEditor::addControl(const juce::String& id, const juce::String& name) {
     Control c;
     c.slider = std::make_unique<juce::Slider>(juce::Slider::RotaryHorizontalVerticalDrag, juce::Slider::TextBoxBelow);
     c.slider->setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff08bdb7));
+    c.slider->setNumDecimalPlacesToDisplay(id.startsWith("attack") || id.startsWith("release") ? 3 : 2);
     c.slider->textFromValueFunction = [id](double value) {
         const int decimals = id.startsWith("attack") || id.startsWith("release") ? 3 : 2;
         return juce::String(value, decimals);
@@ -435,7 +440,7 @@ void CX5MEditor::paint(juce::Graphics& g) {
     g.setColour(juce::Colour(0xffb9bac1));
     g.setFont(juce::Font(10.f));
     g.drawText("FM MUSIC COMPUTER / YM2151",23,66,270,13,juce::Justification::centredLeft);
-    g.drawText("v0.5.7  •  MSX HARDWARE EDITION",23,80,310,12,juce::Justification::centredLeft);
+    g.drawText("v0.5.8  |  MSX HARDWARE EDITION",23,80,310,12,juce::Justification::centredLeft);
     // Embossed MSX emblem in the right corner, below the tabs' top edge.
     g.setColour(juce::Colour(0xff8e929a));
     g.drawHorizontalLine(100,5.f,w-5.f);
@@ -459,7 +464,7 @@ void CX5MEditor::paint(juce::Graphics& g) {
         hardwarePanel(g,{18.f,104.f,383.f,410.f});
         hardwarePanel(g,{458.f,104.f,386.f,410.f});
         g.setColour(teal);g.setFont(juce::Font(13.f,juce::Font::bold));
-        g.drawText("DESTINATION BANK (48 VOICES)",465,84,365,20,juce::Justification::centredLeft);
+        g.drawText("DESTINATION BANK (48 VOICES)",468,110,365,20,juce::Justification::centredLeft);
     } else {
         hardwarePanel(g,{18.f,104.f,371.f,398.f});
         hardwarePanel(g,{392.f,104.f,452.f,398.f});
@@ -471,15 +476,15 @@ void CX5MEditor::resized() {
     synthTab.setBounds(465, 16, 110, 35);
     librarianTab.setBounds(585, 16, 115, 35);
     editorTab.setBounds(710, 16, 130, 35);
-    editorInstructions.setBounds(25, 84, 810, 22);
-    sourceBankChoice.setBounds(25, 109, 370, 30);
-    sourceList.setBounds(25, 144, 370, 250);
-    draftList.setBounds(465, 138, 370, 256);
+    editorInstructions.setBounds(28, 109, 360, 22);
+    sourceBankChoice.setBounds(28, 134, 365, 28);
+    sourceList.setBounds(28, 168, 365, 226);
+    draftList.setBounds(468, 168, 365, 226);
     previousSource.setBounds(25, 399, 75, 24);
     nextSource.setBounds(105, 399, 75, 24);
     auditionSource.setBounds(25, 429, 180, 28);
     stopAudition.setBounds(215, 429, 180, 28);
-    copyVoice.setBounds(398, 218, 64, 64);
+    copyVoice.setBounds(400, 232, 58, 54);
     swapUp.setBounds(465, 399, 90, 27);
     swapDown.setBounds(560, 399, 105, 27);
     renameSlot.setBounds(675, 399, 160, 27);
@@ -487,8 +492,8 @@ void CX5MEditor::resized() {
     loadDraft.setBounds(465, 463, 165, 28);
     newDraft.setBounds(635, 463, 90, 28);
     saveDraft.setBounds(730, 463, 105, 28);
-    destinationBankLabel.setBounds(465, 108, 370, 26);
-    editorStatus.setBounds(25, 492, 810, 24);
+    destinationBankLabel.setBounds(468, 134, 365, 26);
+    editorStatus.setBounds(28, 492, 805, 22);
     bankList.setBounds(25, 115, 355, 315);
     voiceList.setBounds(400, 115, 435, 315);
     rescanBanks.setBounds(25, 448, 190, 35);
