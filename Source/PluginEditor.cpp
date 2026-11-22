@@ -1,5 +1,6 @@
 #include "PluginEditor.h"
 #include "CassetteBank.h"
+#include <BinaryData.h>
 CX5MEditor::CX5MEditor(CX5MProcessor& p) : AudioProcessorEditor(&p), processor(p) {
     for (int i = 1; i <= 4; ++i) {
         auto s = juce::String(i);
@@ -35,10 +36,11 @@ CX5MEditor::CX5MEditor(CX5MProcessor& p) : AudioProcessorEditor(&p), processor(p
     bendLabel.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(bendLabel);
     modDepth.setSliderStyle(juce::Slider::LinearHorizontal);
-    modDepth.setTextBoxStyle(juce::Slider::TextBoxRight, false, 45, 20);
-    modDepth.setNumDecimalPlacesToDisplay(2);
+    modDepth.setTextBoxStyle(juce::Slider::TextBoxRight, false, 34, 18);
     addAndMakeVisible(modDepth);
     modAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(processor.state, "modDepth", modDepth);
+    modDepth.textFromValueFunction = [](double value) { return juce::String(value, 2); };
+    modDepth.updateText();
     modLabel.setText("MOD DEPTH", juce::dontSendNotification);
     modLabel.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(modLabel);
@@ -111,8 +113,17 @@ CX5MEditor::CX5MEditor(CX5MProcessor& p) : AudioProcessorEditor(&p), processor(p
     addAndMakeVisible(synthTab);
     addAndMakeVisible(librarianTab);
     addAndMakeVisible(editorTab);
-    synthTab.onClick = [this] { processor.stopVoicePreview(); bankEditorVisible = false; showTab(false); };
-    librarianTab.onClick = [this] { processor.stopVoicePreview(); bankEditorVisible = false; showTab(true); scanBankFolder(); };
+    synthTab.onClick = [this] {
+        if (bankEditorVisible) stopAudition.onClick();
+        bankEditorVisible = false;
+        showTab(false);
+    };
+    librarianTab.onClick = [this] {
+        if (bankEditorVisible) stopAudition.onClick();
+        bankEditorVisible = false;
+        showTab(true);
+        scanBankFolder();
+    };
     editorTab.onClick = [this] { bankEditorVisible = true; showTab(false); scanEditorSources(); };
     addAndMakeVisible(bankList);
     addAndMakeVisible(voiceList);
@@ -132,6 +143,8 @@ CX5MEditor::CX5MEditor(CX5MProcessor& p) : AudioProcessorEditor(&p), processor(p
     nextSource.addKeyListener(this);
     addAndMakeVisible(previousSource);
     addAndMakeVisible(nextSource);
+    previousSource.setButtonText("PREV");
+    nextSource.setButtonText("NEXT");
     previousSource.onClick = [this] { stepSourceSelection(-1); };
     nextSource.onClick = [this] { stepSourceSelection(1); };
     addAndMakeVisible(renameSlot);
@@ -172,10 +185,7 @@ CX5MEditor::CX5MEditor(CX5MProcessor& p) : AudioProcessorEditor(&p), processor(p
     addAndMakeVisible(loadDraft);
     addAndMakeVisible(newDraft);
     addAndMakeVisible(saveDraft);
-    addAndMakeVisible(editorInstructions);
     addAndMakeVisible(editorStatus);
-    editorInstructions.setText("SOURCE BANK (48 VOICES)", juce::dontSendNotification);
-    editorInstructions.setColour(juce::Label::textColourId, juce::Colour(0xff80c8dc));
     editorStatus.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
     editorStatus.setText("Select a source voice and a destination slot, then COPY.", juce::dontSendNotification);
     sourceBankChoice.onChange = [this] { loadEditorSource(sourceBankChoice.getSelectedId() - 1); };
@@ -314,7 +324,6 @@ CX5MEditor::CX5MEditor(CX5MProcessor& p) : AudioProcessorEditor(&p), processor(p
     // Do not scan the disk while the plugin editor is being constructed.
     // The user can scan on opening the Librarian tab or pressing Refresh.
     showTab(false);
-    // v0.5.5: Yamaha-inspired cosmetic palette; no DSP, MIDI or bank logic changes.
     const auto teal = juce::Colour(0xff08bdb7);
     const auto button = juce::Colour(0xff34343a);
     const auto edge = juce::Colour(0xff65656b);
@@ -325,12 +334,14 @@ CX5MEditor::CX5MEditor(CX5MProcessor& p) : AudioProcessorEditor(&p), processor(p
                      &stopAudition }) {
         b->setColour(juce::TextButton::buttonColourId, button);
         b->setColour(juce::TextButton::buttonOnColourId, teal);
-        b->setColour(juce::TextButton::textColourOffId, juce::Colours::white);
+        b->setColour(juce::TextButton::textColourOffId, juce::Colour(0xffeee1c6));
+        b->setColour(juce::TextButton::textColourOnId, juce::Colour(0xff081d20));
     }
     for (auto* list : { &bankList, &voiceList, &sourceList, &draftList }) {
-        list->setColour(juce::ListBox::backgroundColourId, juce::Colour(0xff1a2028));
+        list->setColour(juce::ListBox::backgroundColourId, juce::Colour(0xff0a1012));
         list->setColour(juce::ListBox::outlineColourId, edge);
         list->setOutlineThickness(1);
+        list->setRowHeight(22);
     }
     for (auto* combo : { &algorithm, &bank, &bendRange, &sourceBankChoice, &sourceVoiceChoice }) {
         combo->setColour(juce::ComboBox::backgroundColourId, juce::Colour(0xff20242b));
@@ -338,223 +349,168 @@ CX5MEditor::CX5MEditor(CX5MProcessor& p) : AudioProcessorEditor(&p), processor(p
         combo->setColour(juce::ComboBox::outlineColourId, edge);
         combo->setColour(juce::ComboBox::arrowColourId, teal);
     }
+    for (auto* display : { &bank, &algorithm }) {
+        display->setColour(juce::ComboBox::backgroundColourId, juce::Colour(0xff59b9bd));
+        display->setColour(juce::ComboBox::textColourId, juce::Colour(0xff081d20));
+        display->setColour(juce::ComboBox::arrowColourId, juce::Colour(0xff081d20));
+    }
     setLookAndFeel(&yamahaStyle);
-    setSize(1060, 680);
 }
 void CX5MEditor::addControl(const juce::String& id, const juce::String& name) {
     Control c;
     c.slider = std::make_unique<juce::Slider>(juce::Slider::RotaryHorizontalVerticalDrag, juce::Slider::TextBoxBelow);
-    c.slider->setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff08bdb7));
-    c.slider->setNumDecimalPlacesToDisplay(id.startsWith("attack") || id.startsWith("release") ? 3 : 2);
-    c.slider->textFromValueFunction = [id](double value) {
-        const int decimals = id.startsWith("attack") || id.startsWith("release") ? 3 : 2;
-        return juce::String(value, decimals);
-    };
+    c.slider->setTextBoxStyle(juce::Slider::TextBoxBelow, false, 48, 16);
     c.label = std::make_unique<juce::Label>(); c.label->setText(name, juce::dontSendNotification);
     c.label->setJustificationType(juce::Justification::centred);
-    c.label->setColour(juce::Label::textColourId, juce::Colours::lightgrey);
+    c.label->setColour(juce::Label::textColourId, juce::Colour(0xffeee1c6));
+    c.label->setFont(juce::Font(11.f, juce::Font::bold));
     addAndMakeVisible(*c.slider); addAndMakeVisible(*c.label);
     c.attachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(processor.state, id, *c.slider);
+    const int decimals = id.startsWith("attack") || id.startsWith("release") ? 3 : 2;
+    c.slider->textFromValueFunction = [decimals](double value) {
+        return juce::String(value, decimals);
+    };
+    c.slider->updateText();
     controls.push_back(std::move(c));
 }
 namespace {
-// Vector lettering inspired by the angular, extended CX5M computer badge.
-// Drawn in JUCE so the plugin needs no external font or image resources.
-void drawCX5MBadge(juce::Graphics& g, juce::Rectangle<float> area) {
-    juce::Graphics::ScopedSaveState save(g);
-    g.addTransform(juce::AffineTransform::translation(area.getX(), area.getY())
-                       .scaled(area.getWidth() / 234.f, area.getHeight() / 46.f));
-    const auto turquoise = juce::Colour(0xff00d3c5);
-    const auto dark = juce::Colour(0xff076e71);
-    g.setColour(dark.withAlpha(0.32f));
-    g.fillRoundedRectangle(0.f, 2.f, 234.f, 44.f, 2.f);
-    g.setColour(turquoise);
-    // The extended C and X are cut from angular MSX-era geometry.
-    juce::Path c;
-    c.startNewSubPath(49.f, 3.f); c.lineTo(17.f, 3.f); c.lineTo(0.f, 23.f);
-    c.lineTo(17.f, 43.f); c.lineTo(49.f, 43.f); c.lineTo(60.f, 31.f);
-    c.lineTo(24.f, 31.f); c.lineTo(17.f, 23.f); c.lineTo(24.f, 15.f);
-    c.lineTo(60.f, 15.f); c.closeSubPath(); g.fillPath(c);
-    juce::Path x;
-    x.startNewSubPath(59.f, 3.f); x.lineTo(82.f, 3.f); x.lineTo(100.f, 16.f);
-    x.lineTo(118.f, 3.f); x.lineTo(141.f, 3.f); x.lineTo(113.f, 23.f);
-    x.lineTo(141.f, 43.f); x.lineTo(118.f, 43.f); x.lineTo(100.f, 30.f);
-    x.lineTo(82.f, 43.f); x.lineTo(59.f, 43.f); x.lineTo(87.f, 23.f);
-    x.closeSubPath(); g.fillPath(x);
-    // Striped digital 5, characteristic of the original CX5M mark.
-    g.fillRect(146.f, 3.f, 43.f, 8.f);
-    g.fillRect(146.f, 3.f, 9.f, 22.f);
-    g.fillRect(146.f, 19.f, 42.f, 7.f);
-    g.fillRect(179.f, 19.f, 9.f, 24.f);
-    g.fillRect(146.f, 35.f, 42.f, 8.f);
-    g.setColour(juce::Colour(0xff101c20));
-    for (float y : { 5.f, 8.f, 21.f, 24.f, 37.f, 40.f })
-        g.drawLine(159.f, y, 176.f, y, 0.7f);
-    g.setColour(turquoise);
-    juce::Path m;
-    m.startNewSubPath(195.f,43.f);m.lineTo(195.f,3.f);m.lineTo(205.f,3.f);
-    m.lineTo(215.f,21.f);m.lineTo(225.f,3.f);m.lineTo(234.f,3.f);
-    m.lineTo(234.f,43.f);m.lineTo(225.f,43.f);m.lineTo(225.f,21.f);
-    m.lineTo(216.f,37.f);m.lineTo(212.f,37.f);m.lineTo(204.f,21.f);
-    m.lineTo(204.f,43.f);m.closeSubPath();g.fillPath(m);
+constexpr auto cream = 0xffeee1c6;
+constexpr auto cyan = 0xff26d9df;
+
+void drawPanel(juce::Graphics& g, juce::Rectangle<float> area, bool recessed = false) {
+    g.setColour(juce::Colours::black.withAlpha(0.65f));
+    g.fillRoundedRectangle(area.translated(0.f, 2.f), 6.f);
+    g.setGradientFill(juce::ColourGradient(
+        juce::Colour(recessed ? 0xff0a0d0e : 0xff353434), area.getTopLeft(),
+        juce::Colour(recessed ? 0xff222525 : 0xff212222), area.getBottomLeft(), false));
+    g.fillRoundedRectangle(area, 6.f);
+    g.setColour(juce::Colour(recessed ? 0xff575653 : 0xff77726a));
+    g.drawRoundedRectangle(area.reduced(0.5f), 6.f, 1.f);
 }
-void hardwarePanel(juce::Graphics& g, juce::Rectangle<float> r, float corner = 7.f) {
-    g.setColour(juce::Colour(0xff101116));
-    g.fillRoundedRectangle(r.translated(0.f, 2.f), corner);
-    g.setGradientFill(juce::ColourGradient(juce::Colour(0xff393a41), r.getX(),r.getY(),
-                                         juce::Colour(0xff292a31),r.getX(),r.getBottom(),false));
-    g.fillRoundedRectangle(r, corner);
-    g.setColour(juce::Colour(0xff84858b).withAlpha(0.7f));
-    g.drawRoundedRectangle(r.reduced(0.5f),corner,1.f);
-    g.setColour(juce::Colour(0xff121318));
-    g.drawLine(r.getX()+7.f,r.getBottom()-2.f,r.getRight()-7.f,r.getBottom()-2.f,1.f);
+
+void drawLegend(juce::Graphics& g, const juce::String& text, juce::Rectangle<int> area) {
+    g.setColour(juce::Colour(cream));
+    g.setFont(juce::Font(15.f, juce::Font::bold));
+    g.drawText(text, area, juce::Justification::centredLeft);
+}
+
+void drawStripe(juce::Graphics& g, int x, int y, int width) {
+    g.setColour(juce::Colour(0xff178f9a));
+    g.fillRect(x, y, width, 2);
 }
 }
+
 void CX5MEditor::paint(juce::Graphics& g) {
-    const auto teal = juce::Colour(0xff16d9cf);
-    const float w = (float) getWidth(), h = (float) getHeight();
-    // Brushed graphite enclosure: fine machining lines and edge lighting.
-    g.setGradientFill(juce::ColourGradient(juce::Colour(0xff42434a), 0.f, 0.f,
-                                          juce::Colour(0xff18191f), w, h, false));
-    g.fillAll();
-    for (int y = 0; y < getHeight(); y += 3) {
-        g.setColour(juce::Colours::white.withAlpha((y % 9 == 0) ? 0.016f : 0.008f));
-        g.drawHorizontalLine(y, 0.f, w);
+    const auto texture = juce::ImageCache::getFromMemory(BinaryData::charcoal_png,
+                                                         BinaryData::charcoal_pngSize);
+    const auto logo = juce::ImageCache::getFromMemory(BinaryData::wordmark_png,
+                                                      BinaryData::wordmark_pngSize);
+    g.fillAll(juce::Colour(0xff252525));
+    if (texture.isValid()) {
+        g.setTiledImageFill(texture, 0, 0, 1.f);
+        g.fillAll();
     }
-    g.setColour(juce::Colour(0xff0b0d10));
-    g.fillRoundedRectangle(2.f, 2.f, w-4.f, 112.f, 10.f);
-    g.setGradientFill(juce::ColourGradient(juce::Colour(0xff63646b), 4.f, 4.f,
-                                          juce::Colour(0xff292a30), 4.f, 106.f, false));
-    g.fillRoundedRectangle(4.f, 4.f, w-8.f, 103.f, 9.f);
-    g.setColour(juce::Colour(0xffa0a1a7).withAlpha(0.5f));
-    g.drawRoundedRectangle(4.5f, 4.5f, w-9.f, 102.f, 9.f, 1.f);
-    // Deep ventilation apertures with a highlight on the near edge.
-    for (int x = 24; x < getWidth()-22; x += 13) {
-        g.setColour(juce::Colour(0xff090a0e));
-        g.fillRoundedRectangle((float)x, 11.f, 6.f, 17.f, 2.3f);
-        g.setColour(juce::Colour(0xff98999e).withAlpha(0.32f));
-        g.drawLine((float)x+1.f, 10.5f, (float)x+6.f, 10.5f, 0.7f);
-    }
-    g.setColour(juce::Colour(0xfff0f0ef));
-    g.setFont(juce::Font(18.f, juce::Font::bold));
-    g.drawText("YAMAHA", 26, 47, 91, 27, juce::Justification::centredLeft);
-    drawCX5MBadge(g, {126.f, 42.f, 204.f, 43.f});
-    g.setColour(juce::Colour(0xffe6e6e9));
-    g.setFont(juce::Font(18.f, juce::Font::italic));
-    g.drawText("REBORN", 340, 51, 110, 24, juce::Justification::centredLeft);
-    g.setColour(juce::Colour(0xffb8bac2));
-    g.setFont(juce::Font(10.5f));
-    g.drawText("FM MUSIC COMPUTER  /  YM2151", 27, 85, 310, 14, juce::Justification::centredLeft);
-    g.drawText("v0.6.0  |  HARDWARE EDITION", 347, 85, 210, 14, juce::Justification::centredLeft);
-    // Small embossed MSX emblem, deliberately separated from the navigation.
-    g.setColour(juce::Colour(0xff13151b));
-    g.fillRoundedRectangle(w-78.f, 77.f, 57.f, 22.f, 2.f);
-    g.setColour(juce::Colour(0xffaeb0b5));
-    g.drawRoundedRectangle(w-77.5f, 77.5f, 56.f, 21.f, 2.f, 0.8f);
-    g.setFont(juce::Font(15.f, juce::Font::bold | juce::Font::italic));
-    g.drawText("MSX", (int)w-74, 77, 50, 22, juce::Justification::centred);
-    // Machined faceplate and inset mounting screws.
-    g.setColour(juce::Colour(0xff111217));
-    g.drawHorizontalLine(111, 6.f, w-6.f);
-    auto screw = [&g](float x, float y) {
-        g.setColour(juce::Colour(0xff111217)); g.fillEllipse(x-4.f,y-4.f,8.f,8.f);
-        g.setColour(juce::Colour(0xff878991)); g.drawEllipse(x-3.5f,y-3.5f,7.f,7.f,0.8f);
-        g.setColour(juce::Colour(0xff1b1c21)); g.drawLine(x-2.f,y+1.f,x+2.f,y-1.f,1.f);
-    };
-    screw(13.f, 122.f); screw(w-13.f, 122.f);
-    screw(13.f, h-12.f); screw(w-13.f, h-12.f);
-    if (!librarianVisible && !bankEditorVisible) {
-        // Upper synth control deck: individually machined operator modules.
-        for (int i = 0; i < 4; ++i) {
-            const float x = 22.f + (float)i * 258.f;
-            auto r = juce::Rectangle<float>(x, 136.f, 246.f, 326.f);
-            hardwarePanel(g, r, 8.f);
-            g.setColour(juce::Colour(0xff11151b));
-            g.fillRoundedRectangle(x+12.f, 147.f, 222.f, 32.f, 4.f);
-            g.setColour(juce::Colour(0xff747881));
-            g.drawRoundedRectangle(x+12.5f,147.5f,221.f,31.f,4.f,0.6f);
-            g.setColour(teal);
-            g.setFont(juce::Font(14.f, juce::Font::bold));
-            g.drawText("OPERATOR " + juce::String(i+1), (int)x+16, 149, 214, 27, juce::Justification::centred);
-            g.setColour(juce::Colour(0xff8e9199).withAlpha(0.35f));
-            g.drawHorizontalLine(313, x+13.f, x+233.f);
+    g.setColour(juce::Colour(0xff77716a));
+    g.drawRoundedRectangle(getLocalBounds().toFloat().reduced(3.f), 10.f, 1.f);
+    g.setColour(juce::Colours::black.withAlpha(0.55f));
+    g.drawRoundedRectangle(getLocalBounds().toFloat().reduced(5.f), 8.f, 1.f);
+
+    g.setImageResamplingQuality(juce::Graphics::highResamplingQuality);
+    g.drawImageWithin(logo, 24, 20, 337, 39, juce::RectanglePlacement::centred);
+    drawStripe(g, 23, 64, 337);
+    drawStripe(g, 23, 69, 337);
+    g.setColour(juce::Colour(cream));
+    g.setFont(juce::Font(12.f));
+    g.drawText("4 OPERATOR FM SYNTHESIZER  /  v" + juce::String(JucePlugin_VersionString),
+               25, 76, 337, 20, juce::Justification::centredLeft);
+
+    if (!librarianVisible) {
+        drawPanel(g, {375.f, 17.f, 380.f, 77.f}, true);
+        g.setColour(juce::Colour(cyan));
+        g.setFont(juce::Font(11.f, juce::Font::bold));
+        g.drawText(bankEditorVisible ? "SYNTH PATCH" : "PATCH", 391, 23, 220, 18,
+                   juce::Justification::centredLeft);
+        g.drawText("ALGORITHM", 618, 23, 123, 18, juce::Justification::centredLeft);
+
+        for (int op = 0; op < 4; ++op) {
+            const int x = 18 + op * 223;
+            drawPanel(g, {(float)x, 108.f, 214.f, 135.f});
+            drawLegend(g, "OP " + juce::String(op + 1), {x + 12, 114, 120, 23});
+            drawStripe(g, x + 10, 137, 194);
         }
-        hardwarePanel(g, {22.f, 474.f, 470.f, 185.f});
-        hardwarePanel(g, {503.f, 474.f, 535.f, 185.f});
-        g.setColour(teal); g.setFont(juce::Font(12.f, juce::Font::bold));
-        g.drawText("GLOBAL  /  CONTROLLERS", 36, 484, 300, 20, juce::Justification::centredLeft);
-        g.drawText("VOICE  /  BANK", 517, 484, 270, 20, juce::Justification::centredLeft);
-        g.setColour(juce::Colour(0xff11151b));
-        g.fillRoundedRectangle(177.f, 531.f, 250.f, 47.f, 4.f);
-        g.setColour(juce::Colour(0xff606a72));
-        g.drawRoundedRectangle(177.5f,531.5f,249.f,46.f,4.f,0.7f);
-    } else if (bankEditorVisible) {
-        hardwarePanel(g, {22.f, 136.f, 473.f, 520.f});
-        hardwarePanel(g, {563.f, 136.f, 475.f, 520.f});
-        g.setColour(teal); g.setFont(juce::Font(14.f, juce::Font::bold));
-        g.drawText("DESTINATION BANK  /  48 VOICES", 580, 146, 442, 23, juce::Justification::centredLeft);
-        g.setColour(juce::Colour(0xff11151b));
-        g.fillRoundedRectangle(502.f, 323.f, 54.f, 66.f, 5.f);
-    } else {
-        hardwarePanel(g, {22.f, 136.f, 486.f, 520.f});
-        hardwarePanel(g, {520.f, 136.f, 518.f, 520.f});
-        g.setColour(teal); g.setFont(juce::Font(14.f, juce::Font::bold));
-        g.drawText("AVAILABLE BANKS", 40, 147, 450, 23, juce::Justification::centredLeft);
-        g.drawText("VOICES  /  48 SLOTS", 538, 147, 475, 23, juce::Justification::centredLeft);
+        drawPanel(g, {911.f, 108.f, 151.f, 135.f});
+        drawLegend(g, "MASTER", {923, 114, 126, 23});
+        drawStripe(g, 921, 137, 131);
     }
+
+    if (bankEditorVisible || librarianVisible) {
+        const int top = bankEditorVisible ? 255 : 108;
+        const float height = bankEditorVisible ? 399.f : 546.f;
+        drawPanel(g, {18.f, (float)top, 488.f, height}, true);
+        drawPanel(g, {574.f, (float)top, 488.f, height}, true);
+        drawLegend(g, bankEditorVisible ? "SOURCE BANK" : "AVAILABLE BANKS",
+                   {30, top + 6, 466, 22});
+        drawLegend(g, bankEditorVisible ? "DESTINATION BANK" : "VOICES",
+                   {586, top + 6, 466, 22});
+        drawStripe(g, 30, top + 29, 464);
+        drawStripe(g, 586, top + 29, 464);
+    } else {
+        drawPanel(g, {18.f, 255.f, 1044.f, 118.f}, true);
+        drawLegend(g, "BANK AND PERFORMANCE", {30, 261, 400, 24});
+        drawStripe(g, 30, 288, 1020);
+    }
+    drawStripe(g, 19, getHeight() - 13, getWidth() - 38);
 }
 CX5MEditor::~CX5MEditor() { setLookAndFeel(nullptr); processor.stopVoicePreview(); }
 
 void CX5MEditor::resized() {
-    synthTab.setBounds(607, 40, 125, 34);
-    librarianTab.setBounds(738, 40, 135, 34);
-    editorTab.setBounds(879, 40, 155, 34);
-    // Bank editor: two balanced wells, central transfer control, footer actions.
-    editorInstructions.setBounds(39, 145, 443, 25);
-    sourceBankChoice.setBounds(39, 177, 443, 31);
-    sourceList.setBounds(39, 216, 443, 292);
-    destinationBankLabel.setBounds(580, 177, 440, 31);
-    draftList.setBounds(580, 216, 440, 292);
-    copyVoice.setBounds(501, 335, 56, 40);
-    previousSource.setBounds(39, 518, 86, 29);
-    nextSource.setBounds(132, 518, 86, 29);
-    auditionSource.setBounds(39, 559, 196, 33);
-    stopAudition.setBounds(246, 559, 236, 33);
-    swapUp.setBounds(580, 518, 111, 29);
-    swapDown.setBounds(699, 518, 126, 29);
-    renameSlot.setBounds(835, 518, 185, 29);
-    auditionDraft.setBounds(580, 559, 190, 33);
-    loadDraft.setBounds(580, 602, 188, 34);
-    newDraft.setBounds(779, 602, 106, 34);
-    saveDraft.setBounds(895, 602, 125, 34);
-    editorStatus.setBounds(39, 611, 435, 30);
-    // Librarian: generous list space and no clipped actions.
-    bankList.setBounds(39, 180, 451, 388);
-    voiceList.setBounds(538, 180, 480, 388);
-    rescanBanks.setBounds(39, 586, 200, 38);
-    librarianInfo.setBounds(253, 586, 765, 38);
-    // Four operator modules, two controls per row.
+    synthTab.setBounds(772, 41, 74, 33);
+    librarianTab.setBounds(850, 41, 96, 33);
+    editorTab.setBounds(950, 41, 112, 33);
+
+    previousPatch.setBounds(388, 43, 30, 35);
+    bank.setBounds(422, 43, 151, 35);
+    nextPatch.setBounds(577, 43, 30, 35);
+    algorithm.setBounds(617, 43, 125, 35);
     for (int i = 0; i < 16; ++i) {
-        const int op = i / 4, n = i % 4;
-        const int x = 40 + op * 258 + (n % 2) * 114;
-        const int y = 190 + (n / 2) * 132;
-        controls[i].slider->setBounds(x, y, 99, 91);
-        controls[i].label->setBounds(x, y + 89, 99, 23);
+        const int x = 24 + (i / 4) * 223 + (i % 4) * 50;
+        controls[i].slider->setBounds(x, 145, 50, 68);
+        controls[i].label->setBounds(x, 214, 50, 20);
     }
-    controls[16].slider->setBounds(41, 510, 124, 108);
-    controls[16].label->setBounds(41, 613, 124, 22);
-    algorithm.setBounds(183, 541, 237, 33);
-    bendLabel.setBounds(180, 589, 52, 23);
-    bendRange.setBounds(234, 589, 72, 26);
-    modLabel.setBounds(311, 589, 89, 23);
-    modDepth.setBounds(399, 589, 98, 26);
-    previousPatch.setBounds(520, 517, 45, 37);
-    bank.setBounds(573, 517, 397, 37);
-    nextPatch.setBounds(978, 517, 45, 37);
-    bankStatus.setBounds(573, 558, 447, 22);
-    cassette.setBounds(650, 586, 370, 35);
-    settings.setBounds(517, 626, 110, 29);
-    folderStatus.setBounds(640, 627, 378, 27);
+    controls[16].slider->setBounds(916, 145, 52, 68);
+    controls[16].label->setBounds(916, 214, 52, 20);
+    bendLabel.setBounds(971, 142, 84, 15);
+    bendRange.setBounds(975, 158, 77, 22);
+    modLabel.setBounds(971, 184, 84, 16);
+    modDepth.setBounds(974, 202, 80, 28);
+
+    bankStatus.setBounds(30, 297, 1017, 26);
+    cassette.setBounds(30, 331, 234, 30);
+    settings.setBounds(272, 331, 94, 30);
+    folderStatus.setBounds(377, 331, 672, 30);
+
+    sourceBankChoice.setBounds(30, 290, 464, 27);
+    destinationBankLabel.setBounds(586, 290, 464, 27);
+    sourceList.setBounds(30, 322, 464, 222);
+    draftList.setBounds(586, 322, 464, 222);
+    copyVoice.setBounds(511, 398, 58, 54);
+    previousSource.setBounds(30, 549, 75, 27);
+    nextSource.setBounds(111, 549, 75, 27);
+    auditionSource.setBounds(30, 582, 185, 29);
+    stopAudition.setBounds(222, 582, 180, 29);
+    swapUp.setBounds(586, 549, 100, 27);
+    swapDown.setBounds(692, 549, 112, 27);
+    renameSlot.setBounds(810, 549, 130, 27);
+    auditionDraft.setBounds(586, 582, 170, 29);
+    loadDraft.setBounds(586, 616, 154, 31);
+    newDraft.setBounds(746, 616, 104, 31);
+    saveDraft.setBounds(856, 616, 194, 31);
+    editorStatus.setBounds(30, 618, 464, 30);
+
+    bankList.setBounds(30, 146, 464, 451);
+    voiceList.setBounds(586, 146, 464, 451);
+    rescanBanks.setBounds(30, 611, 190, 32);
+    librarianInfo.setBounds(586, 609, 464, 34);
 }
 
 void CX5MEditor::refreshBankNames() {
@@ -677,19 +633,24 @@ void CX5MEditor::showTab(bool librarian) {
     // SYNTH and LIBRARIAN callers reset bank-editor mode; editorTab sets it explicitly after calling this.
     librarianVisible = librarian;
     const bool synthVisible = !librarian && !bankEditorVisible;
+    const bool controlsVisible = !librarian;
+    setSize(1080, synthVisible ? 395 : 680);
+    synthTab.setToggleState(synthVisible, juce::dontSendNotification);
+    librarianTab.setToggleState(librarian, juce::dontSendNotification);
+    editorTab.setToggleState(bankEditorVisible, juce::dontSendNotification);
     bankList.setVisible(librarian);
     voiceList.setVisible(librarian);
     rescanBanks.setVisible(librarian);
     librarianInfo.setVisible(librarian);
-    for (auto& c : controls) { c.slider->setVisible(synthVisible); c.label->setVisible(synthVisible); }
-    algorithm.setVisible(synthVisible);
-    bank.setVisible(synthVisible);
-    bendRange.setVisible(synthVisible);
-    bendLabel.setVisible(synthVisible);
-    modDepth.setVisible(synthVisible);
-    modLabel.setVisible(synthVisible);
-    previousPatch.setVisible(synthVisible);
-    nextPatch.setVisible(synthVisible);
+    for (auto& c : controls) { c.slider->setVisible(controlsVisible); c.label->setVisible(controlsVisible); }
+    algorithm.setVisible(controlsVisible);
+    bank.setVisible(controlsVisible);
+    bendRange.setVisible(controlsVisible);
+    bendLabel.setVisible(controlsVisible);
+    modDepth.setVisible(controlsVisible);
+    modLabel.setVisible(controlsVisible);
+    previousPatch.setVisible(controlsVisible);
+    nextPatch.setVisible(controlsVisible);
     bankStatus.setVisible(synthVisible);
     cassette.setVisible(synthVisible);
     settings.setVisible(synthVisible);
@@ -712,7 +673,6 @@ void CX5MEditor::showTab(bool librarian) {
     loadDraft.setVisible(edit);
     newDraft.setVisible(edit);
     saveDraft.setVisible(edit);
-    editorInstructions.setVisible(edit);
     editorStatus.setVisible(edit);
     repaint();
 }
@@ -752,8 +712,10 @@ void CX5MEditor::setEditorStatus(const juce::String& message) {
 
 void CX5MEditor::SourceListModel::paintListBoxItem(int row, juce::Graphics& g, int w, int h, bool selected) {
     if (!juce::isPositiveAndBelow(row,48)) return;
-    if (selected) g.fillAll(juce::Colour(0xff354c62));
-    g.setColour(juce::Colours::white);
+    const bool active = selected && owner.auditionMode == AuditionMode::source;
+    if (selected) g.fillAll(juce::Colour(active ? cyan : 0xff31454b));
+    g.setColour(juce::Colour(active ? 0xff081014 : cream));
+    g.setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(), 15.f, juce::Font::plain));
     g.drawText(juce::String(row+1).paddedLeft('0',2) + "    "
                + CX5MEditor::voiceName(owner.sourceBank.data()+row*64),
                8,0,w-12,h,juce::Justification::centredLeft);
@@ -766,8 +728,10 @@ void CX5MEditor::SourceListModel::selectedRowsChanged(int row) {
 
 void CX5MEditor::DraftListModel::paintListBoxItem(int row, juce::Graphics& g, int w, int h, bool selected) {
     if (!juce::isPositiveAndBelow(row,48)) return;
-    if (selected) g.fillAll(juce::Colour(0xff354c62));
-    g.setColour(juce::Colours::white);
+    const bool active = selected && owner.auditionMode == AuditionMode::slot;
+    if (selected) g.fillAll(juce::Colour(active ? cyan : 0xff31454b));
+    g.setColour(juce::Colour(active ? 0xff081014 : cream));
+    g.setFont(juce::Font(juce::Font::getDefaultMonospacedFontName(), 15.f, juce::Font::plain));
     g.drawText(juce::String(row+1).paddedLeft('0',2) + "    "
                + CX5MEditor::voiceName(owner.draftBank.data()+row*64),
                8,0,w-12,h,juce::Justification::centredLeft);
@@ -785,8 +749,16 @@ bool CX5MEditor::isEmptyVoice(const uint8_t* record) {
 void CX5MEditor::updateAuditionButtons() {
     const auto cyan = juce::Colour(0xff00bcd4);
     const auto inactive = juce::Colour(0xff354c62);
-    auditionSource.setColour(juce::TextButton::buttonColourId, auditionMode == AuditionMode::source ? cyan : inactive);
-    auditionDraft.setColour(juce::TextButton::buttonColourId, auditionMode == AuditionMode::slot ? cyan : inactive);
+    const bool sourceActive = auditionMode == AuditionMode::source;
+    const bool slotActive = auditionMode == AuditionMode::slot;
+    auditionSource.setColour(juce::TextButton::buttonColourId, sourceActive ? cyan : inactive);
+    auditionDraft.setColour(juce::TextButton::buttonColourId, slotActive ? cyan : inactive);
+    auditionSource.setColour(juce::TextButton::textColourOffId,
+                             juce::Colour(sourceActive ? 0xff081d20 : cream));
+    auditionDraft.setColour(juce::TextButton::textColourOffId,
+                            juce::Colour(slotActive ? 0xff081d20 : cream));
+    sourceList.repaint();
+    draftList.repaint();
 }
 void CX5MEditor::markDraftDirty() { draftDirty = true; updateDestinationLabel(); }
 void CX5MEditor::updateDestinationLabel() {

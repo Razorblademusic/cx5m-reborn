@@ -85,7 +85,7 @@ private:
     bool synchronisingSourceSelection = false;
     bool draftDirty = false;
     void markDraftDirty();
-    juce::Label editorInstructions, editorStatus, destinationBankLabel;
+    juce::Label editorStatus, destinationBankLabel;
     juce::String destinationBankName{"Unsaved custom bank"};
     enum class AuditionMode { stopped, source, slot };
     AuditionMode auditionMode = AuditionMode::stopped;
