@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(CX5MReborn VERSION 0.5.4 LANGUAGES C CXX)
+project(CX5MReborn VERSION 0.6.1 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 if(DEFINED JUCE_DIR)
   add_subdirectory("${JUCE_DIR}" JUCE)
@@ -23,10 +23,11 @@ juce_add_plugin(CX5MReborn
   EDITOR_WANTS_KEYBOARD_FOCUS TRUE
   COPY_PLUGIN_AFTER_BUILD FALSE)
 juce_generate_juce_header(CX5MReborn)
+juce_add_binary_data(CX5MArtwork SOURCES Assets/wordmark.png Assets/charcoal.png)
 target_sources(CX5MReborn PRIVATE
   Source/PluginProcessor.cpp Source/PluginEditor.cpp
   "${YMFM_DIR}/src/ymfm_misc.cpp"
   "${YMFM_DIR}/src/ymfm_opm.cpp")
 target_include_directories(CX5MReborn PRIVATE "${YMFM_DIR}/src")
 target_compile_definitions(CX5MReborn PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
-target_link_libraries(CX5MReborn PRIVATE juce::juce_audio_utils juce::juce_audio_processors juce::juce_dsp juce::juce_gui_extra juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
+target_link_libraries(CX5MReborn PRIVATE CX5MArtwork juce::juce_audio_utils juce::juce_audio_processors juce::juce_dsp juce::juce_gui_extra juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
