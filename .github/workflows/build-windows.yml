@@ -30,6 +30,6 @@ jobs:
       - name: Upload VST3
         uses: actions/upload-artifact@v4
         with:
-          name: CX5M-Reborn-v0.3-Experimental
+          name: CX5M-Reborn-v0.6.1-Hardware-Skin
           path: package/
           if-no-files-found: error
